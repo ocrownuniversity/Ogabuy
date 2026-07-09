@@ -10,6 +10,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -1159,8 +1160,6 @@ function showReceipt(sale) {
           </table>
           <div class="border-t border-slate-200 pt-2 text-[11px] space-y-0.5">
             <div class="flex justify-between"><span>Subtotal</span><span>${fmtMoney(sale.subtotal)}</span></div>
-            <div class="flex justify-between"><span>Discount</span><span>-${fmtMoney(sale.discount)}</span></div>
-            <div class="flex justify-between"><span>VAT/Tax</span><span>${fmtMoney(sale.tax)}</span></div>
             <div class="flex justify-between font-bold text-sm pt-1 border-t border-slate-200"><span>Grand total</span><span>${fmtMoney(sale.total)}</span></div>
             <div class="flex justify-between pt-1"><span>Payment</span><span>${esc(sale.paymentMethod)}</span></div>
           </div>
@@ -1172,7 +1171,7 @@ function showReceipt(sale) {
       <div class="p-4 border-t border-slate-100 flex flex-wrap justify-end gap-2">
         <button class="btn btn-outline" onclick="closeModal()">Close</button>
         <button class="btn btn-outline" onclick="emailReceipt('${esc(sale.customerName)}')">Email</button>
-        <button class="btn btn-outline" onclick="whatsappReceipt('${esc(sale.receiptNo)}')">WhatsApp</button>
+        <button id="waShareBtn" class="btn btn-outline" onclick="shareReceiptImage('${esc(sale.receiptNo)}')">WhatsApp</button>
         <button class="btn btn-primary" onclick="window.print()">Print</button>
       </div>
     </div>
@@ -1187,7 +1186,41 @@ function emailReceipt(customerName) {
   const body = encodeURIComponent("Thank you for your purchase at " + (STATE.company.name||"OGABUY") + ". Please find your receipt details on the printed/PDF copy.");
   window.open(`mailto:?subject=${subject}&body=${body}`);
 }
-function whatsappReceipt(receiptNo) {
+async function shareReceiptImage(receiptNo) {
+  const btn = document.getElementById("waShareBtn");
+  const el = document.getElementById("receiptPrintArea");
+  if (!el || !window.html2canvas) { whatsappReceiptTextOnly(receiptNo); return; }
+  const originalLabel = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>`; }
+  try {
+    const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+    canvas.toBlob(async (blob) => {
+      if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
+      if (!blob) { whatsappReceiptTextOnly(receiptNo); return; }
+      const file = new File([blob], `receipt-${receiptNo}.png`, { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: "OGABUY Receipt", text: `Receipt ${receiptNo}` });
+          return;
+        } catch (err) {
+          if (err && err.name === "AbortError") return; // user cancelled share sheet
+        }
+      }
+      // Fallback for browsers without file sharing support: download the image, then open WhatsApp.
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `receipt-${receiptNo}.png`; a.click();
+      URL.revokeObjectURL(url);
+      toast("Your browser can't attach images directly — the receipt image downloaded, attach it in WhatsApp manually.", "info");
+      whatsappReceiptTextOnly(receiptNo);
+    }, "image/png");
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
+    toast("Could not generate receipt image: " + e.message, "error");
+    whatsappReceiptTextOnly(receiptNo);
+  }
+}
+function whatsappReceiptTextOnly(receiptNo) {
   const text = encodeURIComponent(`Thank you for shopping at ${STATE.company.name||"OGABUY"}! Your receipt number is ${receiptNo}.`);
   window.open(`https://wa.me/?text=${text}`, "_blank");
 }
