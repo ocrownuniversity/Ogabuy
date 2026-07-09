@@ -401,6 +401,54 @@ function isStoreKeeperOrAbove() { return STATE.staff && ["Super Admin","Manager"
 
 function lowStockThreshold(p) { return p.reorderLevel != null ? Number(p.reorderLevel) : 5; }
 
+/* ---------------------------- Product Icons ---------------------------- */
+const PRODUCT_ICONS = [
+  { key: "phone", icon: "📱", label: "Phone" },
+  { key: "earphone", icon: "🎧", label: "Earphones" },
+  { key: "battery", icon: "🔋", label: "Battery" },
+  { key: "laptop", icon: "💻", label: "Laptop" },
+  { key: "camera", icon: "📷", label: "Camera" },
+  { key: "watch", icon: "⌚", label: "Watch" },
+  { key: "tv", icon: "📺", label: "TV" },
+  { key: "cable", icon: "🔌", label: "Cable/Charger" },
+  { key: "grocery", icon: "🛒", label: "Grocery" },
+  { key: "drink", icon: "🥤", label: "Drink" },
+  { key: "food", icon: "🍞", label: "Food" },
+  { key: "medicine", icon: "💊", label: "Medicine/Pharmacy" },
+  { key: "clothing", icon: "👕", label: "Clothing" },
+  { key: "shoes", icon: "👟", label: "Shoes" },
+  { key: "bag", icon: "👜", label: "Bag" },
+  { key: "book", icon: "📚", label: "Book/Stationery" },
+  { key: "tool", icon: "🔧", label: "Tools/Hardware" },
+  { key: "cosmetics", icon: "💄", label: "Cosmetics" },
+  { key: "toy", icon: "🧸", label: "Toys" },
+  { key: "box", icon: "📦", label: "General/Other" },
+];
+function iconEmoji(key) { const found = PRODUCT_ICONS.find(i => i.key === key); return found ? found.icon : "📦"; }
+function productThumb(p, sizeClass) {
+  sizeClass = sizeClass || "w-9 h-9";
+  if (p.imageUrl) return `<img src="${esc(p.imageUrl)}" class="${sizeClass} rounded-lg object-cover">`;
+  if (p.iconKey) return `<div class="${sizeClass} rounded-lg flex items-center justify-center text-lg" style="background:var(--slate-100)">${iconEmoji(p.iconKey)}</div>`;
+  return `<div class="${sizeClass} rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-xs font-bold">${esc((p.name||"?").charAt(0))}</div>`;
+}
+function iconPickerHtml(selectedKey) {
+  return `<div class="grid grid-cols-5 sm:grid-cols-7 gap-2" id="pf_iconGrid">
+    ${PRODUCT_ICONS.map(i => `
+      <button type="button" title="${esc(i.label)}" data-icon="${i.key}" onclick="selectProductIcon('${i.key}')"
+        class="icon-pick-btn aspect-square rounded-lg border flex items-center justify-center text-xl transition ${selectedKey===i.key ? 'border-blue-600 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50'}">
+        ${i.icon}
+      </button>`).join("")}
+  </div>`;
+}
+function selectProductIcon(key) {
+  document.getElementById("pf_iconKey").value = key;
+  document.querySelectorAll("#pf_iconGrid .icon-pick-btn").forEach(btn => {
+    btn.classList.toggle("border-blue-600", btn.dataset.icon === key);
+    btn.classList.toggle("bg-blue-50", btn.dataset.icon === key);
+    btn.classList.toggle("border-slate-200", btn.dataset.icon !== key);
+  });
+}
+
 /* ---------------------------- Auth Flow ---------------------------- */
 function switchAuthPane(id) {
   ["loginPane","setupPane","forgotPane"].forEach(p => document.getElementById(p).classList.toggle("hidden", p !== id));
@@ -777,7 +825,7 @@ function productRow(p) {
   const qty = Number(p.quantity)||0;
   const status = qty <= 0 ? `<span class="badge bg-red-100 text-red-700">Out of stock</span>` : qty <= lowStockThreshold(p) ? `<span class="badge bg-amber-100 text-amber-700">Low: ${qty}</span>` : `<span class="badge bg-green-100 text-green-700">${qty} in stock</span>`;
   return `<tr>
-    <td>${p.imageUrl ? `<img src="${esc(p.imageUrl)}" class="w-9 h-9 rounded-lg object-cover">` : `<div class="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-xs font-bold">${esc((p.name||"?").charAt(0))}</div>`}</td>
+    <td>${productThumb(p)}</td>
     <td class="font-medium">${esc(p.name)}</td>
     <td class="text-slate-500">${esc(p.sku||"—")}</td>
     <td>${p.category?`<span class="badge bg-blue-50 text-blue-700">${esc(p.category)}</span>`:"—"}</td>
@@ -811,7 +859,12 @@ function openProductModal(id) {
           <div><label class="lbl">Quantity in stock *</label><input id="pf_qty" type="number" class="input" value="${p?.quantity ?? 0}" ${p ? 'disabled' : ''}></div>
           <div><label class="lbl">Reorder level</label><input id="pf_reorder" type="number" class="input" value="${p?.reorderLevel ?? 5}"></div>
           <div class="col-span-2"><label class="lbl">Supplier</label><input id="pf_supplier" class="input" value="${esc(p?.supplier)}"></div>
-          <div class="col-span-2"><label class="lbl">Product image URL</label><input id="pf_image" class="input" value="${esc(p?.imageUrl)}" placeholder="https://…"></div>
+          <div class="col-span-2"><label class="lbl">Product image URL <span class="text-slate-400 font-normal normal-case">(optional — leave blank to use an icon)</span></label><input id="pf_image" class="input" value="${esc(p?.imageUrl)}" placeholder="https://…"></div>
+          <div class="col-span-2">
+            <label class="lbl">Or pick a placeholder icon</label>
+            <input type="hidden" id="pf_iconKey" value="${esc(p?.iconKey || 'box')}">
+            ${iconPickerHtml(p?.iconKey || 'box')}
+          </div>
           <div class="col-span-2"><label class="lbl">Description</label><textarea id="pf_desc" class="input" rows="2">${esc(p?.description)}</textarea></div>
         </div>
         ${p ? `<p class="text-xs text-slate-400">To change stock quantity, use the "Adjust" action from the product list instead — this keeps stock history accurate.</p>` : ""}
@@ -837,6 +890,7 @@ async function saveProduct(id) {
     reorderLevel: parseInt(document.getElementById("pf_reorder").value || "5"),
     supplier: document.getElementById("pf_supplier").value.trim(),
     imageUrl: document.getElementById("pf_image").value.trim(),
+    iconKey: document.getElementById("pf_iconKey").value || "box",
     description: document.getElementById("pf_desc").value.trim(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -981,7 +1035,7 @@ function renderPOSGrid() {
   const items = STATE.products.filter(p => !posSearch || (p.name||"").toLowerCase().includes(posSearch) || (p.sku||"").toLowerCase().includes(posSearch));
   grid.innerHTML = items.map(p => `
     <button onclick="addToCart('${p.id}')" ${Number(p.quantity)<=0?'disabled':''} class="card p-3 text-left hover:shadow-md hover:border-blue-300 transition disabled:opacity-40 disabled:cursor-not-allowed">
-      ${p.imageUrl ? `<img src="${esc(p.imageUrl)}" class="w-full h-20 object-cover rounded-lg mb-2">` : `<div class="w-full h-20 rounded-lg bg-slate-100 flex items-center justify-center text-slate-300 text-2xl font-bold mb-2">${esc((p.name||"?").charAt(0))}</div>`}
+      ${p.imageUrl ? `<img src="${esc(p.imageUrl)}" class="w-full h-20 object-cover rounded-lg mb-2">` : `<div class="w-full h-20 rounded-lg bg-slate-100 flex items-center justify-center text-3xl mb-2">${p.iconKey ? iconEmoji(p.iconKey) : esc((p.name||"?").charAt(0))}</div>`}
       <p class="text-xs font-semibold truncate">${esc(p.name)}</p>
       <p class="text-xs text-blue-700 font-bold">${fmtMoney(p.sellingPrice)}</p>
       <p class="text-[10px] text-slate-400">${Number(p.quantity)<=0 ? 'Out of stock' : p.quantity+' in stock'}</p>
@@ -1111,13 +1165,14 @@ function showReceipt(sale) {
             <div class="flex justify-between pt-1"><span>Payment</span><span>${esc(sale.paymentMethod)}</span></div>
           </div>
           <div id="receiptQr" class="flex justify-center my-3"></div>
-          <p class="text-center text-[11px] text-slate-500">Thank you for shopping with us!</p>
+          <p class="text-center text-[11px] font-semibold text-slate-700">10 Days Warranty from date of purchase</p>
+          <p class="text-center text-[11px] text-slate-500 mt-0.5">Thank you for shopping with us!</p>
         </div>
       </div>
       <div class="p-4 border-t border-slate-100 flex flex-wrap justify-end gap-2">
         <button class="btn btn-outline" onclick="closeModal()">Close</button>
         <button class="btn btn-outline" onclick="emailReceipt('${esc(sale.customerName)}')">Email</button>
-        <button class="btn btn-outline" onclick="whatsappReceipt(${JSON.stringify(sale.receiptNo)})">WhatsApp</button>
+        <button class="btn btn-outline" onclick="whatsappReceipt('${esc(sale.receiptNo)}')">WhatsApp</button>
         <button class="btn btn-primary" onclick="window.print()">Print</button>
       </div>
     </div>
