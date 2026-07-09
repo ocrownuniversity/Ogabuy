@@ -296,16 +296,17 @@ const STATE = {
 };
 
 const ROLE_NAV = {
-  "Super Admin": ["dashboard","products","pos","customers","suppliers","purchases","reports","staff","settings"],
-  "Manager": ["dashboard","products","pos","customers","suppliers","purchases","reports","staff","settings"],
-  "Cashier": ["dashboard","pos","customers","reports"],
-  "Sales Representative": ["dashboard","pos","customers","products","reports"],
+  "Super Admin": ["dashboard","products","pos","salesRecords","customers","suppliers","purchases","reports","staff","settings"],
+  "Manager": ["dashboard","products","pos","salesRecords","customers","suppliers","purchases","reports","staff","settings"],
+  "Cashier": ["dashboard","pos","salesRecords","customers","reports"],
+  "Sales Representative": ["dashboard","pos","salesRecords","customers","products","reports"],
   "Store Keeper": ["dashboard","products","suppliers","purchases","reports"],
 };
 
 const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>` },
   { key: "pos", label: "Point of Sale", icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 1.94-4.693 2.447-7.152.075-.364-.148-.75-.53-.75H5.25M7.5 14.25L5.106 5.272M7.5 14.25L6.75 9M6.75 9h13.5" /></svg>` },
+  { key: "salesRecords", label: "Sales Records", icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-3.348-.35M18.75 4.97A48.416 48.416 0 0012 4.5c-1.153 0-2.294.056-3.42.166M6 18.75H5.25A2.25 2.25 0 013 16.5V6.108c0-1.135.845-2.098 1.976-2.192a48.424 48.424 0 013.348-.35m0 0c.098-.53.317-1.02.632-1.436M8.324 3.566A48.128 48.128 0 0112 3.375c1.288 0 2.55.08 3.783.234m0 0c.316.416.535.906.632 1.436m-4.415-1.67c-.213-.032-.428-.06-.645-.084M13.5 6h-3v1.5h3V6z" /></svg>` },
   { key: "products", label: "Products", icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>` },
   { key: "customers", label: "Customers", icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>` },
   { key: "suppliers", label: "Suppliers", icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h14.25c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" /></svg>` },
@@ -319,6 +320,7 @@ const PAGE_TITLES = {
   dashboard: ["Dashboard", "Live overview of your business"],
   products: ["Products", "Manage your catalog and stock"],
   pos: ["Point of Sale", "Ring up sales fast"],
+  salesRecords: ["Sales Records", "Search and reprint any past sale"],
   customers: ["Customers", "Manage customer relationships"],
   suppliers: ["Suppliers", "Manage vendors and outstanding balances"],
   purchases: ["Purchases", "Purchase orders & goods received"],
@@ -592,7 +594,7 @@ function setPage(key) {
   document.getElementById("pageSubtitle").textContent = PAGE_TITLES[key][1];
   toggleSidebar(false);
   const renderers = {
-    dashboard: renderDashboard, products: renderProducts, pos: renderPOS,
+    dashboard: renderDashboard, products: renderProducts, pos: renderPOS, salesRecords: renderSalesRecords,
     customers: renderCustomers, suppliers: renderSuppliers, purchases: renderPurchases,
     reports: renderReports, staff: renderStaff, settings: renderSettings,
   };
@@ -626,7 +628,7 @@ function attachListeners() {
   }, err => console.error(err)));
   STATE.unsub.push(db.collection("sales").orderBy("createdAt", "desc").limit(1000).onSnapshot(snap => {
     STATE.sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    if (["dashboard","reports","customers"].includes(STATE.currentPage)) refreshCurrentPage();
+    if (["dashboard","reports","customers","salesRecords"].includes(STATE.currentPage)) refreshCurrentPage();
   }, err => console.error(err)));
   STATE.unsub.push(db.collection("purchases").orderBy("createdAt", "desc").limit(500).onSnapshot(snap => {
     STATE.purchases = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -646,7 +648,7 @@ function attachListeners() {
 
 function refreshCurrentPage() {
   const renderers = {
-    dashboard: renderDashboard, products: renderProducts, pos: renderPOSDataOnly,
+    dashboard: renderDashboard, products: renderProducts, pos: renderPOSDataOnly, salesRecords: renderSalesRecords,
     customers: renderCustomers, suppliers: renderSuppliers, purchases: renderPurchases,
     reports: renderReports, staff: renderStaff, settings: null,
   };
@@ -1130,6 +1132,89 @@ async function completeSale() {
     STATE.cart = []; posDiscount = 0; posSelectedCustomer = null;
     renderPOSCart();
   } catch (e) { toast(e.message, "error"); }
+}
+
+/* ---------------------------- Sales Records ---------------------------- */
+let salesRecFilter = { q: "", from: "", to: "", payment: "", cashier: "" };
+function quickSalesRange(kind) {
+  const now = new Date();
+  let from, to = now;
+  if (kind === "today") from = startOfDay(now);
+  else if (kind === "week") from = startOfWeek(now);
+  else if (kind === "month") from = startOfMonth(now);
+  else { salesRecFilter.from = ""; salesRecFilter.to = ""; renderSalesRecords(); return; }
+  salesRecFilter.from = from.toISOString().slice(0,10);
+  salesRecFilter.to = now.toISOString().slice(0,10);
+  renderSalesRecords();
+}
+function filteredSalesRecords() {
+  const q = salesRecFilter.q.toLowerCase();
+  const from = salesRecFilter.from ? new Date(salesRecFilter.from + "T00:00:00") : null;
+  const to = salesRecFilter.to ? new Date(salesRecFilter.to + "T23:59:59") : null;
+  return STATE.sales.filter(s => {
+    const t = s.createdAt && s.createdAt.toDate ? s.createdAt.toDate() : new Date(s.createdAt);
+    if (from && t < from) return false;
+    if (to && t > to) return false;
+    if (salesRecFilter.payment && s.paymentMethod !== salesRecFilter.payment) return false;
+    if (salesRecFilter.cashier && s.cashier !== salesRecFilter.cashier) return false;
+    if (q && !((s.receiptNo||"").toLowerCase().includes(q) || (s.customerName||"").toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+function renderSalesRecords() {
+  const rows = filteredSalesRecords();
+  const cashiers = [...new Set(STATE.sales.map(s => s.cashier).filter(Boolean))];
+  const total = rows.reduce((a,s) => a + (Number(s.total)||0), 0);
+  document.getElementById("pageContainer").innerHTML = `
+    <div class="card p-4 mb-4">
+      <div class="flex flex-wrap gap-2 mb-3">
+        <button class="btn btn-outline btn-sm" onclick="quickSalesRange('today')">Today</button>
+        <button class="btn btn-outline btn-sm" onclick="quickSalesRange('week')">This week</button>
+        <button class="btn btn-outline btn-sm" onclick="quickSalesRange('month')">This month</button>
+        <button class="btn btn-outline btn-sm" onclick="quickSalesRange('all')">All time</button>
+      </div>
+      <div class="flex flex-wrap gap-2 items-center">
+        <input class="input max-w-xs" placeholder="Search receipt# or customer…" value="${esc(salesRecFilter.q)}" oninput="salesRecFilter.q=this.value;renderSalesRecords()">
+        <input type="date" class="input w-auto" value="${esc(salesRecFilter.from)}" onchange="salesRecFilter.from=this.value;renderSalesRecords()">
+        <span class="text-xs text-slate-400">to</span>
+        <input type="date" class="input w-auto" value="${esc(salesRecFilter.to)}" onchange="salesRecFilter.to=this.value;renderSalesRecords()">
+        <select class="input w-auto" onchange="salesRecFilter.payment=this.value;renderSalesRecords()">
+          <option value="">All payment methods</option>
+          ${["Cash","Bank Transfer","POS","Card Payment","Mobile Money","Credit Sale"].map(m=>`<option ${salesRecFilter.payment===m?'selected':''}>${m}</option>`).join("")}
+        </select>
+        <select class="input w-auto" onchange="salesRecFilter.cashier=this.value;renderSalesRecords()">
+          <option value="">All cashiers</option>
+          ${cashiers.map(c=>`<option ${salesRecFilter.cashier===c?'selected':''}>${esc(c)}</option>`).join("")}
+        </select>
+        <button class="btn btn-outline btn-sm ml-auto" onclick="csvDownload('sales-records.csv',[['Receipt#','Date','Customer','Cashier','Payment','Total'],...filteredSalesRecords().map(s=>[s.receiptNo,fmtDateTime(s.createdAt),s.customerName,s.cashier,s.paymentMethod,s.total])])">Export CSV</button>
+      </div>
+    </div>
+    <div class="flex items-center justify-between mb-3">
+      <p class="text-sm text-slate-500">${rows.length} sale(s) found</p>
+      <p class="text-sm font-semibold">Total: ${fmtMoney(total)}</p>
+    </div>
+    <div class="card overflow-hidden">
+      <div class="overflow-x-auto"><table class="tbl">
+        <thead><tr><th>Receipt#</th><th>Date &amp; time</th><th>Customer</th><th>Cashier</th><th>Payment</th><th>Items</th><th>Total</th><th></th></tr></thead>
+        <tbody>${rows.map(s => `
+          <tr>
+            <td class="font-medium">${esc(s.receiptNo)}</td>
+            <td class="text-slate-500">${fmtDateTime(s.createdAt)}</td>
+            <td>${esc(s.customerName||"Walk-in")}</td>
+            <td>${esc(s.cashier||"—")}</td>
+            <td><span class="badge bg-blue-50 text-blue-700">${esc(s.paymentMethod)}</span></td>
+            <td class="text-slate-500">${(s.items||[]).length} item(s)</td>
+            <td class="font-semibold">${fmtMoney(s.total)}</td>
+            <td class="text-right"><button class="btn btn-outline btn-sm" onclick="viewSaleReceipt('${s.id}')">View / Print</button></td>
+          </tr>`).join("") || `<tr><td colspan="8" class="text-center text-slate-400 py-10">No sales found for this filter.</td></tr>`}</tbody>
+      </table></div>
+    </div>
+  `;
+}
+function viewSaleReceipt(id) {
+  const sale = STATE.sales.find(s => s.id === id);
+  if (!sale) { toast("Sale not found.", "error"); return; }
+  showReceipt(sale);
 }
 
 /* ---------------------------- Receipt ---------------------------- */
