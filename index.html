@@ -422,8 +422,8 @@ async function doSetup() {
   const btn = document.getElementById("setupBtn");
   btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Creating…`;
   try {
-    const existing = await db.collection("staff").where("role", "==", "Super Admin").limit(1).get();
-    if (!existing.empty) {
+    const setupDoc = await db.collection("meta").doc("setup").get();
+    if (setupDoc.exists && setupDoc.data().adminCreated) {
       errEl.textContent = "An admin account already exists. Please sign in instead.";
       errEl.classList.remove("hidden");
       btn.disabled = false; btn.innerHTML = "Create admin account";
@@ -436,6 +436,7 @@ async function doSetup() {
     await db.collection("settings").doc("company").set({
       name: bizName, address: "", phone: "", email: email, logoUrl: "", taxRate: 7.5, currency: "₦"
     }, { merge: true });
+    await db.collection("meta").doc("setup").set({ adminCreated: true, createdAt: FieldValue.serverTimestamp() }, { merge: true });
     toast("Admin account created. Welcome to OGABUY!", "success");
   } catch (e) {
     errEl.textContent = e.message || "Setup failed.";
