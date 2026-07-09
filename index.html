@@ -65,10 +65,13 @@ table.tbl tr:hover td{background:#FAFBFF}
 .toast-item{background:#0F172A;color:#fff;padding:.7rem 1rem;border-radius:.6rem;font-size:.85rem;box-shadow:0 8px 24px rgba(0,0,0,.25);display:flex;align-items:center;gap:.5rem;min-width:220px;animation:slidein .2s ease}
 @keyframes slidein{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
 .dot{width:8px;height:8px;border-radius:50%}
+.receipt-watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;pointer-events:none;z-index:0}
+.receipt-watermark span{display:inline-block;transform:rotate(-32deg);white-space:nowrap;font-family:'Poppins',sans-serif;font-weight:800;font-size:2.6rem;letter-spacing:.05em;color:rgba(30,58,138,.08)}
 @media print{
   body *{visibility:hidden}
   #receiptPrintArea, #receiptPrintArea *{visibility:visible}
   #receiptPrintArea{position:absolute;left:0;top:0;width:80mm}
+  .receipt-watermark span{color:rgba(30,58,138,.12) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 .tab-btn{padding:.5rem 1rem;font-size:.85rem;font-weight:600;color:var(--slate-500);border-bottom:2px solid transparent;cursor:pointer}
 .tab-btn.active{color:var(--blue-700);border-color:var(--orange-500)}
@@ -1226,7 +1229,11 @@ function showReceipt(sale) {
         <button onclick="closeModal()" class="text-slate-400 hover:text-slate-700">✕</button>
       </div>
       <div class="p-4">
-        <div id="receiptPrintArea" class="p-4 border border-dashed border-slate-300 rounded-lg text-sm">
+        <div id="receiptPrintArea" class="p-4 border border-dashed border-slate-300 rounded-lg text-sm" style="position:relative;overflow:hidden">
+          <div class="receipt-watermark" aria-hidden="true">
+            <span>${esc((STATE.company.name||"OGABUY").toUpperCase())}</span>
+          </div>
+          <div style="position:relative;z-index:1">
           <div class="text-center mb-3">
             ${STATE.company.logoUrl ? `<img src="${esc(STATE.company.logoUrl)}" class="h-10 mx-auto mb-1">` : ""}
             <p class="font-display font-bold text-base">${esc(STATE.company.name||"OGABUY")}</p>
@@ -1251,6 +1258,7 @@ function showReceipt(sale) {
           <div id="receiptQr" class="flex justify-center my-3"></div>
           <p class="text-center text-[11px] font-semibold text-slate-700">10 Days Warranty from date of purchase</p>
           <p class="text-center text-[11px] text-slate-500 mt-0.5">Thank you for shopping with us!</p>
+          </div>
         </div>
       </div>
       <div class="p-4 border-t border-slate-100 flex flex-wrap justify-end gap-2">
