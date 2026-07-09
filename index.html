@@ -65,14 +65,14 @@ table.tbl tr:hover td{background:#FAFBFF}
 .toast-item{background:#0F172A;color:#fff;padding:.7rem 1rem;border-radius:.6rem;font-size:.85rem;box-shadow:0 8px 24px rgba(0,0,0,.25);display:flex;align-items:center;gap:.5rem;min-width:220px;animation:slidein .2s ease}
 @keyframes slidein{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
 .dot{width:8px;height:8px;border-radius:50%}
-.receipt-watermark{position:absolute;inset:-15%;display:flex;align-items:center;justify-content:center;overflow:hidden;pointer-events:none;z-index:0}
-.receipt-watermark .wm-inner{transform:rotate(-30deg);display:flex;flex-direction:column;gap:1.5rem;white-space:nowrap}
-.receipt-watermark .wm-inner span{font-family:'Poppins',sans-serif;font-weight:800;font-size:1.5rem;letter-spacing:.1em;color:rgba(30,58,138,.16)}
+.receipt-watermark{position:absolute;inset:-25%;display:flex;align-items:center;justify-content:center;overflow:hidden;pointer-events:none;z-index:0}
+.receipt-watermark .wm-inner{transform:rotate(-30deg);display:grid;grid-template-columns:repeat(2,1fr);gap:2.4rem 2.8rem;white-space:nowrap}
+.receipt-watermark .wm-inner span{font-family:'Poppins',sans-serif;font-weight:700;font-size:1.15rem;letter-spacing:.08em;color:rgba(30,58,138,.09)}
 @media print{
   body *{visibility:hidden}
   #receiptPrintArea, #receiptPrintArea *{visibility:visible}
   #receiptPrintArea{position:absolute;left:0;top:0;width:80mm}
-  .receipt-watermark .wm-inner span{color:rgba(30,58,138,.2) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .receipt-watermark .wm-inner span{color:rgba(30,58,138,.13) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 .tab-btn{padding:.5rem 1rem;font-size:.85rem;font-weight:600;color:var(--slate-500);border-bottom:2px solid transparent;cursor:pointer}
 .tab-btn.active{color:var(--blue-700);border-color:var(--orange-500)}
@@ -1193,15 +1193,19 @@ function renderSalesRecords() {
         <button class="btn btn-outline btn-sm ml-auto" onclick="csvDownload('sales-records.csv',[['Receipt#','Date','Customer','Cashier','Payment','Total'],...filteredSalesRecords().map(s=>[s.receiptNo,fmtDateTime(s.createdAt),s.customerName,s.cashier,s.paymentMethod,s.total])])">Export CSV</button>
       </div>
     </div>
-    <div class="flex items-center justify-between mb-3">
-      <p class="text-sm text-slate-500">${rows.length} sale(s) found</p>
-      <p class="text-sm font-semibold">Total: ${fmtMoney(total)}</p>
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+      <p class="text-sm text-slate-500">${rows.length} sale(s) found &middot; check two or more to merge them onto one receipt</p>
+      <div class="flex items-center gap-3">
+        <p class="text-sm font-semibold">Total: ${fmtMoney(total)}</p>
+        <button class="btn btn-orange btn-sm" onclick="combineSelectedSales()">Combine &amp; print selected</button>
+      </div>
     </div>
     <div class="card overflow-hidden">
       <div class="overflow-x-auto"><table class="tbl">
-        <thead><tr><th>Receipt#</th><th>Date &amp; time</th><th>Customer</th><th>Cashier</th><th>Payment</th><th>Items</th><th>Total</th><th></th></tr></thead>
+        <thead><tr><th></th><th>Receipt#</th><th>Date &amp; time</th><th>Customer</th><th>Cashier</th><th>Payment</th><th>Items</th><th>Total</th><th></th></tr></thead>
         <tbody>${rows.map(s => `
           <tr>
+            <td><input type="checkbox" class="salesRecCheck" value="${s.id}" style="width:16px;height:16px"></td>
             <td class="font-medium">${esc(s.receiptNo)}</td>
             <td class="text-slate-500">${fmtDateTime(s.createdAt)}</td>
             <td>${esc(s.customerName||"Walk-in")}</td>
@@ -1210,7 +1214,7 @@ function renderSalesRecords() {
             <td class="text-slate-500">${(s.items||[]).length} item(s)</td>
             <td class="font-semibold">${fmtMoney(s.total)}</td>
             <td class="text-right"><button class="btn btn-outline btn-sm" onclick="viewSaleReceipt('${s.id}')">View / Print</button></td>
-          </tr>`).join("") || `<tr><td colspan="8" class="text-center text-slate-400 py-10">No sales found for this filter.</td></tr>`}</tbody>
+          </tr>`).join("") || `<tr><td colspan="9" class="text-center text-slate-400 py-10">No sales found for this filter.</td></tr>`}</tbody>
       </table></div>
     </div>
   `;
@@ -1219,6 +1223,26 @@ function viewSaleReceipt(id) {
   const sale = STATE.sales.find(s => s.id === id);
   if (!sale) { toast("Sale not found.", "error"); return; }
   showReceipt(sale);
+}
+function combineSelectedSales() {
+  const ids = [...document.querySelectorAll(".salesRecCheck:checked")].map(c => c.value);
+  if (ids.length < 2) { toast("Check at least two sales to combine them onto one receipt.", "warn"); return; }
+  const chosen = ids.map(id => STATE.sales.find(s => s.id === id)).filter(Boolean);
+  const customerNames = [...new Set(chosen.map(s => s.customerName || "Walk-in"))];
+  const paymentMethods = [...new Set(chosen.map(s => s.paymentMethod))];
+  const combined = {
+    receiptNo: chosen.map(s => s.receiptNo).join(" + "),
+    items: chosen.flatMap(s => s.items || []),
+    subtotal: chosen.reduce((a,s) => a + (Number(s.subtotal)||0), 0),
+    discount: chosen.reduce((a,s) => a + (Number(s.discount)||0), 0),
+    tax: chosen.reduce((a,s) => a + (Number(s.tax)||0), 0),
+    total: chosen.reduce((a,s) => a + (Number(s.total)||0), 0),
+    paymentMethod: paymentMethods.join(" / "),
+    customerName: customerNames.length === 1 ? customerNames[0] : customerNames.join(", "),
+    cashier: STATE.staff?.name || STATE.user.email,
+    createdAt: new Date(),
+  };
+  showReceipt(combined);
 }
 
 /* ---------------------------- Receipt ---------------------------- */
@@ -1233,7 +1257,7 @@ function showReceipt(sale) {
         <div id="receiptPrintArea" class="p-4 border border-dashed border-slate-300 rounded-lg text-sm" style="position:relative;overflow:hidden">
           <div class="receipt-watermark" aria-hidden="true">
             <div class="wm-inner">
-              ${Array(7).fill(`<span>${esc((STATE.company.name||"OGABUY").toUpperCase())}</span>`).join("")}
+              ${Array(6).fill(`<span>${esc((STATE.company.name||"OGABUY").toUpperCase())}</span>`).join("")}
             </div>
           </div>
           <div style="position:relative;z-index:1">
@@ -1254,8 +1278,7 @@ function showReceipt(sale) {
             <tbody>${sale.items.map(i => `<tr><td class="py-0.5">${esc(i.name)}</td><td class="text-center">${i.qty}</td><td class="text-right">${fmtMoney(i.total)}</td></tr>`).join("")}</tbody>
           </table>
           <div class="border-t border-slate-200 pt-2 text-[11px] space-y-0.5">
-            <div class="flex justify-between"><span>Subtotal</span><span>${fmtMoney(sale.subtotal)}</span></div>
-            <div class="flex justify-between font-bold text-sm pt-1 border-t border-slate-200"><span>Grand total</span><span>${fmtMoney(sale.total)}</span></div>
+            <div class="flex justify-between font-bold text-sm pt-1"><span>Total Amount</span><span>${fmtMoney(sale.total)}</span></div>
             <div class="flex justify-between pt-1"><span>Payment</span><span>${esc(sale.paymentMethod)}</span></div>
           </div>
           <div id="receiptQr" class="flex justify-center my-3"></div>
