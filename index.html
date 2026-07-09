@@ -1006,6 +1006,7 @@ let posDiscount = 0;
 let posPayment = "Cash";
 let posNewCustomerName = "";
 let posNewCustomerPhone = "";
+let posNewCustomerAddress = "";
 function togglePosNewCustomer() {
   const box = document.getElementById("posNewCustomerBox");
   if (box) box.classList.toggle("hidden", !!posSelectedCustomer);
@@ -1031,10 +1032,11 @@ function renderPOS() {
         </div>
         <div id="posNewCustomerBox" class="mb-3 ${posSelectedCustomer ? 'hidden' : ''}">
           <p class="text-xs text-slate-500 mb-1.5">Walk-in? Add their details to save them as a customer automatically:</p>
-          <div class="grid grid-cols-2 gap-2">
+          <div class="grid grid-cols-2 gap-2 mb-2">
             <input id="posNewCustName" class="input" placeholder="Customer name" value="${esc(posNewCustomerName)}" oninput="posNewCustomerName=this.value">
             <input id="posNewCustPhone" class="input" placeholder="Phone number" value="${esc(posNewCustomerPhone)}" oninput="posNewCustomerPhone=this.value">
           </div>
+          <input id="posNewCustAddress" class="input" placeholder="Address (optional)" value="${esc(posNewCustomerAddress)}" oninput="posNewCustomerAddress=this.value">
         </div>
         <div id="posCartList" class="space-y-2 max-h-64 overflow-y-auto mb-3"></div>
         <div class="border-t border-slate-100 pt-3 space-y-2">
@@ -1137,11 +1139,13 @@ async function completeSale() {
   const customer = posSelectedCustomer ? STATE.customers.find(c => c.id === posSelectedCustomer) : null;
   const newCustName = !customer ? posNewCustomerName.trim() : "";
   const newCustPhone = !customer ? posNewCustomerPhone.trim() : "";
+  const newCustAddress = !customer ? posNewCustomerAddress.trim() : "";
   const receiptNo = genReceiptNo();
   const saleData = {
     receiptNo, items: STATE.cart.map(c => ({ productId: c.productId, name: c.name, sku: c.sku, price: c.price, qty: c.qty, total: c.price*c.qty })),
     subtotal: t.subtotal, discount: t.discount, tax: t.tax, total: t.total,
     paymentMethod: posPayment, customerId: customer?.id || null, customerName: customer?.name || newCustName || "Walk-in",
+    customerPhone: customer?.phone || newCustPhone || "", customerAddress: customer?.address || newCustAddress || "",
     cashier: STATE.staff?.name || STATE.user.email, createdAt: FieldValue.serverTimestamp(),
   };
   try {
@@ -1151,7 +1155,7 @@ async function completeSale() {
     if (newCustName) {
       newCustRef = db.collection("customers").doc();
       batch.set(newCustRef, {
-        name: newCustName, phone: newCustPhone, email: "", address: "",
+        name: newCustName, phone: newCustPhone, email: "", address: newCustAddress,
         totalSpent: t.total, purchaseCount: 1, outstandingBalance: 0,
         lastPurchaseAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp(),
       });
@@ -1172,10 +1176,11 @@ async function completeSale() {
     if (newCustName) toast(newCustName + " was saved to your customer list.", "success");
     toast("Sale completed — " + receiptNo, "success");
     showReceipt({ ...saleData, createdAt: new Date() });
-    STATE.cart = []; posDiscount = 0; posSelectedCustomer = null; posNewCustomerName = ""; posNewCustomerPhone = "";
+    STATE.cart = []; posDiscount = 0; posSelectedCustomer = null; posNewCustomerName = ""; posNewCustomerPhone = ""; posNewCustomerAddress = "";
     const custSel = document.getElementById("posCustomer"); if (custSel) custSel.value = "";
     const ncName = document.getElementById("posNewCustName"); if (ncName) ncName.value = "";
     const ncPhone = document.getElementById("posNewCustPhone"); if (ncPhone) ncPhone.value = "";
+    const ncAddress = document.getElementById("posNewCustAddress"); if (ncAddress) ncAddress.value = "";
     togglePosNewCustomer();
     renderPOSCart();
   } catch (e) { toast(e.message, "error"); }
@@ -1282,6 +1287,8 @@ function combineSelectedSales() {
     total: chosen.reduce((a,s) => a + (Number(s.total)||0), 0),
     paymentMethod: paymentMethods.join(" / "),
     customerName: customerNames.length === 1 ? customerNames[0] : customerNames.join(", "),
+    customerPhone: customerNames.length === 1 ? (chosen[0].customerPhone || "") : "",
+    customerAddress: customerNames.length === 1 ? (chosen[0].customerAddress || "") : "",
     cashier: STATE.staff?.name || STATE.user.email,
     createdAt: new Date(),
   };
@@ -1311,6 +1318,8 @@ function showReceipt(sale) {
             <div class="flex justify-between"><span class="text-slate-500">Date</span><span>${fmtDateTime(sale.createdAt)}</span></div>
             <div class="flex justify-between"><span class="text-slate-500">Cashier</span><span>${esc(sale.cashier)}</span></div>
             <div class="flex justify-between"><span class="text-slate-500">Customer</span><span>${esc(sale.customerName)}</span></div>
+            ${sale.customerPhone ? `<div class="flex justify-between"><span class="text-slate-500">Phone</span><span>${esc(sale.customerPhone)}</span></div>` : ""}
+            ${sale.customerAddress ? `<div class="flex justify-between"><span class="text-slate-500">Address</span><span class="text-right" style="max-width:65%">${esc(sale.customerAddress)}</span></div>` : ""}
           </div>
           <table class="w-full text-[11px] mb-2">
             <thead><tr class="border-b border-slate-200"><th class="text-left py-1">Item</th><th class="text-center py-1">Qty</th><th class="text-right py-1">Amt</th></tr></thead>
