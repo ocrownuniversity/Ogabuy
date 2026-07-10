@@ -1360,22 +1360,77 @@ function emailReceipt(customerName) {
 }
 async function prepareReceiptImage(receiptNo) {
   window._receiptShareFile = null;
+  window._receiptShareFailed = false;
   if (window._receiptShareUrl) { URL.revokeObjectURL(window._receiptShareUrl); window._receiptShareUrl = null; }
   const el = document.getElementById("receiptPrintArea");
-  if (!el || !window.html2canvas) return;
+  if (!el || !window.html2canvas) { window._receiptShareFailed = true; return; }
+  const withTimeout = (p, ms) => Promise.race([p, new Promise((_,rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
   try {
-    const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true, imageTimeout: 4000 });
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      window._receiptShareFile = new File([blob], `receipt-${receiptNo}.png`, { type: "image/png" });
-      window._receiptShareUrl = URL.createObjectURL(blob);
-    }, "image/png");
-  } catch (e) { console.error("Receipt image capture failed:", e); }
+    await withTimeout(captureReceiptCanvas(el, receiptNo), 8000);
+  } catch (e) {
+    // Most common cause: a logo image hosted somewhere without CORS headers,
+    // which "taints" the canvas and blocks export. Retry once with the logo hidden.
+    console.error("Receipt image capture failed, retrying without logo:", e);
+    const logoImg = el.querySelector("img");
+    const prevDisplay = logoImg ? logoImg.style.display : null;
+    if (logoImg) logoImg.style.display = "none";
+    try {
+      await withTimeout(captureReceiptCanvas(el, receiptNo), 8000);
+    } catch (e2) {
+      console.error("Receipt image capture failed again — falling back to text-only share:", e2);
+      window._receiptShareFailed = true;
+    } finally {
+      if (logoImg) logoImg.style.display = prevDisplay;
+    }
+  }
+}
+function captureReceiptCanvas(el, receiptNo) {
+  // html2canvas has weak/slow support for SVG <pattern> fills, which was
+  // causing the capture to hang. So we hide the SVG watermark for the capture,
+  // then paint the watermark back on afterwards using the native Canvas API
+  // (fast, reliable, no SVG parsing involved).
+  const wmHost = el.querySelector(".receipt-watermark");
+  const prevDisplay = wmHost ? wmHost.style.display : null;
+  if (wmHost) wmHost.style.display = "none";
+  return html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true, imageTimeout: 4000 }).then(canvas => {
+    if (wmHost) wmHost.style.display = prevDisplay;
+    drawWatermarkOnCanvas(canvas, (STATE.company.name || "OGABUY").toUpperCase());
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) { reject(new Error("toBlob returned null")); return; }
+        window._receiptShareFile = new File([blob], `receipt-${receiptNo}.png`, { type: "image/png" });
+        window._receiptShareUrl = URL.createObjectURL(blob);
+        resolve();
+      }, "image/png");
+    });
+  }).catch(err => { if (wmHost) wmHost.style.display = prevDisplay; throw err; });
+}
+function drawWatermarkOnCanvas(canvas, text) {
+  const ctx = canvas.getContext("2d");
+  ctx.save();
+  ctx.font = "700 26px Poppins, Arial, sans-serif";
+  ctx.fillStyle = "rgba(30,58,138,0.10)";
+  ctx.textBaseline = "middle";
+  ctx.translate(canvas.width/2, canvas.height/2);
+  ctx.rotate(-30 * Math.PI/180);
+  ctx.translate(-canvas.width/2, -canvas.height/2);
+  const stepX = 210, stepY = 130;
+  for (let y = -canvas.height*0.5; y < canvas.height*1.5; y += stepY) {
+    for (let x = -canvas.width*0.5; x < canvas.width*1.5; x += stepX) {
+      ctx.fillText(text, x, y);
+    }
+  }
+  ctx.restore();
 }
 // Kept synchronous on purpose: calling navigator.share()/window.open() directly
 // inside the click handler (no "await" before them) keeps them tied to the
 // user's tap so the browser doesn't treat them as an unsolicited pop-up.
 function shareReceiptImage(receiptNo) {
+  if (window._receiptShareFailed) {
+    toast("Couldn't attach the receipt as a picture (often caused by an external logo image) — sending the text instead.", "warn");
+    fallbackWhatsappShare(receiptNo);
+    return;
+  }
   const file = window._receiptShareFile;
   if (!file) {
     toast("Still preparing the receipt image — give it a second and tap WhatsApp again.", "info");
