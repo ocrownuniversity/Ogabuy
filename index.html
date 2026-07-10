@@ -1347,47 +1347,53 @@ function showReceipt(sale) {
   if (qrHost && window.QRCode) {
     new QRCode(qrHost, { text: `OGABUY|${sale.receiptNo}|${sale.total}|${new Date(sale.createdAt).toISOString()}`, width: 90, height: 90, colorDark: "#0F172A" });
   }
+  // Capture the receipt as an image right away, in the background, so the
+  // WhatsApp button can share it instantly (within the same tap) once pressed —
+  // waiting to capture it on click loses the "user gesture" and gets the
+  // share/pop-up silently blocked by the browser.
+  setTimeout(() => prepareReceiptImage(sale.receiptNo), 200);
 }
 function emailReceipt(customerName) {
   const subject = encodeURIComponent("Your OGABUY Receipt");
   const body = encodeURIComponent("Thank you for your purchase at " + (STATE.company.name||"OGABUY") + ". Please find your receipt details on the printed/PDF copy.");
   window.open(`mailto:?subject=${subject}&body=${body}`);
 }
-async function shareReceiptImage(receiptNo) {
-  const btn = document.getElementById("waShareBtn");
+async function prepareReceiptImage(receiptNo) {
+  window._receiptShareFile = null;
+  if (window._receiptShareUrl) { URL.revokeObjectURL(window._receiptShareUrl); window._receiptShareUrl = null; }
   const el = document.getElementById("receiptPrintArea");
-  if (!el || !window.html2canvas) { whatsappReceiptTextOnly(receiptNo); return; }
-  const originalLabel = btn ? btn.textContent : "";
-  if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>`; }
+  if (!el || !window.html2canvas) return;
   try {
-    const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
-    canvas.toBlob(async (blob) => {
-      if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
-      if (!blob) { whatsappReceiptTextOnly(receiptNo); return; }
-      const file = new File([blob], `receipt-${receiptNo}.png`, { type: "image/png" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file], title: "OGABUY Receipt", text: `Receipt ${receiptNo}` });
-          return;
-        } catch (err) {
-          if (err && err.name === "AbortError") return; // user cancelled share sheet
-        }
-      }
-      // Fallback for browsers without file sharing support: download the image, then open WhatsApp.
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = `receipt-${receiptNo}.png`; a.click();
-      URL.revokeObjectURL(url);
-      toast("Your browser can't attach images directly — the receipt image downloaded, attach it in WhatsApp manually.", "info");
-      whatsappReceiptTextOnly(receiptNo);
+    const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true, imageTimeout: 4000 });
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      window._receiptShareFile = new File([blob], `receipt-${receiptNo}.png`, { type: "image/png" });
+      window._receiptShareUrl = URL.createObjectURL(blob);
     }, "image/png");
-  } catch (e) {
-    if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
-    toast("Could not generate receipt image: " + e.message, "error");
-    whatsappReceiptTextOnly(receiptNo);
-  }
+  } catch (e) { console.error("Receipt image capture failed:", e); }
 }
-function whatsappReceiptTextOnly(receiptNo) {
+// Kept synchronous on purpose: calling navigator.share()/window.open() directly
+// inside the click handler (no "await" before them) keeps them tied to the
+// user's tap so the browser doesn't treat them as an unsolicited pop-up.
+function shareReceiptImage(receiptNo) {
+  const file = window._receiptShareFile;
+  if (!file) {
+    toast("Still preparing the receipt image — give it a second and tap WhatsApp again.", "info");
+    return;
+  }
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    navigator.share({ files: [file], title: "OGABUY Receipt", text: `Receipt ${receiptNo}` })
+      .catch(err => { if (!err || err.name !== "AbortError") fallbackWhatsappShare(receiptNo); });
+    return;
+  }
+  fallbackWhatsappShare(receiptNo);
+}
+function fallbackWhatsappShare(receiptNo) {
+  if (window._receiptShareUrl) {
+    const a = document.createElement("a");
+    a.href = window._receiptShareUrl; a.download = `receipt-${receiptNo}.png`; a.click();
+    toast("Your browser can't attach images directly — the receipt image downloaded, attach it in WhatsApp manually.", "info");
+  }
   const text = encodeURIComponent(`Thank you for shopping at ${STATE.company.name||"OGABUY"}! Your receipt number is ${receiptNo}.`);
   window.open(`https://wa.me/?text=${text}`, "_blank");
 }
