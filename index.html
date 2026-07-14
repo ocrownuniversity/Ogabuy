@@ -230,6 +230,7 @@ table.tbl tr:hover td{background:#FAFBFF}
         <p id="pageSubtitle" class="text-xs text-slate-400 hidden sm:block">&mdash;</p>
       </div>
       <div class="ml-auto flex items-center gap-2 sm:gap-3">
+        <div id="branchSwitcherHost"></div>
         <div class="relative hidden md:block">
           <button onclick="toggleNotifPanel()" class="p-2 rounded-lg hover:bg-slate-100 relative text-slate-600">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
@@ -282,8 +283,10 @@ const FieldValue = firebase.firestore.FieldValue;
 /* ---------------------------- App State ---------------------------- */
 const STATE = {
   user: null,
-  staff: null,          // {name, role, email, active}
+  staff: null,          // {name, role, email, active, branchId}
   company: { name: "OGABUY", address: "", phone: "", email: "", logoUrl: "", taxRate: 7.5, currency: "₦" },
+  branches: [],
+  currentBranchId: null, // "ALL" (Super Admin aggregate view) or a specific branch id
   products: [],
   customers: [],
   suppliers: [],
@@ -298,7 +301,7 @@ const STATE = {
 };
 
 const ROLE_NAV = {
-  "Super Admin": ["dashboard","products","pos","salesRecords","customers","suppliers","purchases","reports","staff","settings"],
+  "Super Admin": ["dashboard","products","pos","salesRecords","customers","suppliers","purchases","reports","staff","branches","settings"],
   "Manager": ["dashboard","products","pos","salesRecords","customers","suppliers","purchases","reports","staff","settings"],
   "Cashier": ["dashboard","pos","salesRecords","customers","reports"],
   "Sales Representative": ["dashboard","pos","salesRecords","customers","products","reports"],
@@ -315,6 +318,7 @@ const NAV_ITEMS = [
   { key: "purchases", label: "Purchases", icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0c1.1.128 1.907 1.077 1.907 2.185zM9.75 9h.008v.008H9.75V9zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 4.5h.008v.008h-.008V13.5zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>` },
   { key: "reports", label: "Reports", icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" /></svg>` },
   { key: "staff", label: "Staff & Roles", icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" /></svg>` },
+  { key: "branches", label: "Branches", icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15l-.75 6h-13.5L4.5 3zM6 9v12m12-12v12M9.75 9v3.75m4.5-3.75v3.75M6 21v-3.75a1.5 1.5 0 011.5-1.5h9a1.5 1.5 0 011.5 1.5V21" /></svg>` },
   { key: "settings", label: "Settings", icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.49l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.49l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.28z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>` },
 ];
 
@@ -328,6 +332,7 @@ const PAGE_TITLES = {
   purchases: ["Purchases", "Purchase orders & goods received"],
   reports: ["Reports & Analytics", "Export business performance data"],
   staff: ["Staff & Roles", "Manage team access"],
+  branches: ["Branches", "Create and manage store branches"],
   settings: ["Settings", "Company profile & preferences"],
 };
 
@@ -405,6 +410,27 @@ function canManage() { return STATE.staff && ["Super Admin","Manager"].includes(
 function isStoreKeeperOrAbove() { return STATE.staff && ["Super Admin","Manager","Store Keeper"].includes(STATE.staff.role); }
 
 function lowStockThreshold(p) { return p.reorderLevel != null ? Number(p.reorderLevel) : 5; }
+
+/* ---------------------------- Branches ---------------------------- */
+// The branch a Super Admin is currently "working as" (they can switch);
+// every other role is permanently locked to the branch on their staff profile.
+function activeBranchId() {
+  return STATE.staff?.role === "Super Admin" ? STATE.currentBranchId : (STATE.staff?.branchId || null);
+}
+function isAggregateView() { return STATE.staff?.role === "Super Admin" && STATE.currentBranchId === "ALL"; }
+function branchName(id) { const b = STATE.branches.find(x => x.id === id); return b ? b.name : "—"; }
+// Filters any branch-tagged array down to the active branch, unless the
+// Super Admin is viewing the "All branches" aggregate.
+function bScope(arr) {
+  if (isAggregateView()) return arr;
+  const bid = activeBranchId();
+  return arr.filter(x => x.branchId === bid);
+}
+function requireActiveBranch() {
+  const id = activeBranchId();
+  if (!id) { toast("Select a specific branch from the top bar first.", "warn"); return null; }
+  return id;
+}
 
 /* ---------------------------- Product Icons ---------------------------- */
 const PRODUCT_ICONS = [
@@ -504,6 +530,7 @@ async function doSetup() {
     await db.collection("settings").doc("company").set({
       name: bizName, address: "", phone: "", email: email, logoUrl: "", taxRate: 7.5, currency: "₦"
     }, { merge: true });
+    await db.collection("branches").add({ name: "Main Branch", address: "", phone: "", createdAt: FieldValue.serverTimestamp() });
     await db.collection("meta").doc("setup").set({ adminCreated: true, createdAt: FieldValue.serverTimestamp() }, { merge: true });
     toast("Admin account created. Welcome to OGABUY!", "success");
   } catch (e) {
@@ -569,9 +596,11 @@ auth.onAuthStateChanged(async (user) => {
       auth.signOut();
       return;
     }
+    STATE.currentBranchId = STATE.staff.role === "Super Admin" ? "ALL" : (STATE.staff.branchId || null);
     document.getElementById("authScreen").classList.add("hidden");
     document.getElementById("appShell").classList.remove("hidden");
     buildNav();
+    renderBranchSwitcher();
     document.getElementById("userNameLbl").textContent = STATE.staff.name || STATE.user.email;
     document.getElementById("userRoleLbl").textContent = STATE.staff.role || "Staff";
     document.getElementById("userAvatar").textContent = (STATE.staff.name || STATE.user.email || "?").charAt(0).toUpperCase();
@@ -594,6 +623,26 @@ function buildNav() {
   `).join("");
 }
 
+function renderBranchSwitcher() {
+  const host = document.getElementById("branchSwitcherHost");
+  if (!host) return;
+  if (STATE.staff.role === "Super Admin") {
+    host.innerHTML = `
+      <select class="input w-auto text-xs py-1.5" onchange="setActiveBranch(this.value)">
+        <option value="ALL" ${STATE.currentBranchId==='ALL'?'selected':''}>All branches (view only)</option>
+        ${STATE.branches.map(b => `<option value="${b.id}" ${STATE.currentBranchId===b.id?'selected':''}>${esc(b.name)}</option>`).join("")}
+      </select>`;
+  } else {
+    host.innerHTML = `<span class="badge bg-blue-50 text-blue-700">${esc(branchName(STATE.staff.branchId))}</span>`;
+  }
+}
+function setActiveBranch(id) {
+  STATE.currentBranchId = id;
+  renderBranchSwitcher();
+  refreshCurrentPage();
+  if (STATE.currentPage === "dashboard") renderDashboard();
+}
+
 function toggleSidebar(force) {
   const sb = document.getElementById("sidebar");
   const ov = document.getElementById("sidebarOverlay");
@@ -613,7 +662,7 @@ function setPage(key) {
   const renderers = {
     dashboard: renderDashboard, products: renderProducts, pos: renderPOS, salesRecords: renderSalesRecords,
     customers: renderCustomers, suppliers: renderSuppliers, purchases: renderPurchases,
-    reports: renderReports, staff: renderStaff, settings: renderSettings,
+    reports: renderReports, staff: renderStaff, branches: renderBranches, settings: renderSettings,
   };
   (renderers[key] || renderDashboard)();
 }
@@ -627,6 +676,11 @@ function toggleNotifPanel() {
 function detachListeners() { STATE.unsub.forEach(fn => { try { fn(); } catch(e){} }); STATE.unsub = []; }
 
 function attachListeners() {
+  STATE.unsub.push(db.collection("branches").orderBy("name").onSnapshot(snap => {
+    STATE.branches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderBranchSwitcher();
+    if (STATE.currentPage === "branches") refreshCurrentPage();
+  }, err => console.error(err)));
   STATE.unsub.push(db.collection("settings").doc("company").onSnapshot(doc => {
     if (doc.exists) STATE.company = Object.assign({}, STATE.company, doc.data());
     if (["dashboard","settings","pos"].includes(STATE.currentPage)) refreshCurrentPage();
@@ -667,15 +721,16 @@ function refreshCurrentPage() {
   const renderers = {
     dashboard: renderDashboard, products: renderProducts, pos: renderPOSDataOnly, salesRecords: renderSalesRecords,
     customers: renderCustomers, suppliers: renderSuppliers, purchases: renderPurchases,
-    reports: renderReports, staff: renderStaff, settings: null,
+    reports: renderReports, staff: renderStaff, branches: renderBranches, settings: null,
   };
   const fn = renderers[STATE.currentPage];
   if (fn) fn();
 }
 
 function renderNotifications() {
-  const low = STATE.products.filter(p => Number(p.quantity) <= lowStockThreshold(p) && Number(p.quantity) > 0);
-  const out = STATE.products.filter(p => Number(p.quantity) <= 0);
+  const prods = bScope(STATE.products);
+  const low = prods.filter(p => Number(p.quantity) <= lowStockThreshold(p) && Number(p.quantity) > 0);
+  const out = prods.filter(p => Number(p.quantity) <= 0);
   const list = document.getElementById("notifList");
   const dot = document.getElementById("notifDot");
   const items = [
@@ -688,7 +743,7 @@ function renderNotifications() {
 
 /* ---------------------------- Dashboard ---------------------------- */
 function salesInRange(start, end) {
-  return STATE.sales.filter(s => {
+  return bScope(STATE.sales).filter(s => {
     const t = s.createdAt && s.createdAt.toDate ? s.createdAt.toDate() : new Date(s.createdAt);
     return t >= start && t <= end;
   });
@@ -702,11 +757,12 @@ function renderDashboard() {
   const todaySales = salesInRange(startOfDay(now), now);
   const weekSales = salesInRange(startOfWeek(now), now);
   const monthSales = salesInRange(startOfMonth(now), now);
-  const allSales = STATE.sales;
+  const allSales = bScope(STATE.sales);
   const sum = arr => arr.reduce((a,s) => a + (Number(s.total)||0), 0);
   const totalRevenue = sum(allSales);
-  const lowStock = STATE.products.filter(p => Number(p.quantity) <= lowStockThreshold(p) && Number(p.quantity) > 0);
-  const outStock = STATE.products.filter(p => Number(p.quantity) <= 0);
+  const scopedProducts = bScope(STATE.products);
+  const lowStock = scopedProducts.filter(p => Number(p.quantity) <= lowStockThreshold(p) && Number(p.quantity) > 0);
+  const outStock = scopedProducts.filter(p => Number(p.quantity) <= 0);
 
   const salesByProduct = {};
   allSales.forEach(s => (s.items||[]).forEach(it => {
@@ -722,7 +778,7 @@ function renderDashboard() {
 
   document.getElementById("pageContainer").innerHTML = `
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-      ${statCard("Products in stock", STATE.products.length.toLocaleString(), "blue", iconBox)}
+      ${statCard("Products in stock", scopedProducts.length.toLocaleString(), "blue", iconBox)}
       ${statCard("Sales today", todaySales.length.toLocaleString(), "orange", iconCart, fmtMoney(sum(todaySales)))}
       ${statCard("Sales this month", monthSales.length.toLocaleString(), "green", iconCalendar, fmtMoney(sum(monthSales)))}
       ${statCard("Total revenue (all-time)", fmtMoney(totalRevenue), "blue", iconMoney)}
@@ -731,7 +787,7 @@ function renderDashboard() {
       ${miniStat("This week", fmtMoney(sum(weekSales)), weekSales.length + " sales")}
       ${miniStat("Low stock items", lowStock.length, "needs reordering", lowStock.length ? "amber" : null)}
       ${miniStat("Out of stock", outStock.length, "unavailable to sell", outStock.length ? "red" : null)}
-      ${miniStat("Customers", STATE.customers.length, "in database")}
+      ${miniStat("Customers", bScope(STATE.customers).length, "in database")}
     </div>
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
       <div class="lg:col-span-2 card p-4 sm:p-5">
@@ -816,12 +872,14 @@ function miniStat(label, value, sub, alert) {
 /* ---------------------------- Products ---------------------------- */
 let productFilter = { q: "", category: "" };
 function renderProducts() {
-  const cats = [...new Set(STATE.products.map(p => p.category).filter(Boolean))];
-  const rows = STATE.products.filter(p => {
+  const scoped = bScope(STATE.products);
+  const cats = [...new Set(scoped.map(p => p.category).filter(Boolean))];
+  const rows = scoped.filter(p => {
     const matchQ = !productFilter.q || (p.name||"").toLowerCase().includes(productFilter.q) || (p.sku||"").toLowerCase().includes(productFilter.q);
     const matchC = !productFilter.category || p.category === productFilter.category;
     return matchQ && matchC;
   });
+  const showBranchCol = isAggregateView();
   document.getElementById("pageContainer").innerHTML = `
     <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
       <div class="flex-1 flex gap-2">
@@ -831,17 +889,18 @@ function renderProducts() {
           ${cats.map(c => `<option value="${esc(c)}" ${productFilter.category===c?'selected':''}>${esc(c)}</option>`).join("")}
         </select>
       </div>
-      ${canManage()||isStoreKeeperOrAbove() ? `<button class="btn btn-primary" onclick="openProductModal()">+ Add product</button>` : ""}
+      ${(canManage()||isStoreKeeperOrAbove()) && !isAggregateView() ? `<button class="btn btn-primary" onclick="openProductModal()">+ Add product</button>` : ""}
+      ${isAggregateView() ? `<p class="text-xs text-slate-400">Pick a specific branch above to add or edit products.</p>` : ""}
     </div>
     <div class="card overflow-hidden">
       <div class="overflow-x-auto"><table class="tbl">
-        <thead><tr><th></th><th>Product</th><th>SKU</th><th>Category</th><th>Cost</th><th>Price</th><th>Stock</th><th>Supplier</th><th></th></tr></thead>
-        <tbody>${rows.map(p => productRow(p)).join("") || `<tr><td colspan="9" class="text-center text-slate-400 py-10">No products found. Add your first product to get started.</td></tr>`}</tbody>
+        <thead><tr><th></th><th>Product</th><th>SKU</th><th>Category</th>${showBranchCol?'<th>Branch</th>':''}<th>Cost</th><th>Price</th><th>Stock</th><th>Supplier</th><th></th></tr></thead>
+        <tbody>${rows.map(p => productRow(p, showBranchCol)).join("") || `<tr><td colspan="9" class="text-center text-slate-400 py-10">No products found. Add your first product to get started.</td></tr>`}</tbody>
       </table></div>
     </div>
   `;
 }
-function productRow(p) {
+function productRow(p, showBranchCol) {
   const qty = Number(p.quantity)||0;
   const status = qty <= 0 ? `<span class="badge bg-red-100 text-red-700">Out of stock</span>` : qty <= lowStockThreshold(p) ? `<span class="badge bg-amber-100 text-amber-700">Low: ${qty}</span>` : `<span class="badge bg-green-100 text-green-700">${qty} in stock</span>`;
   return `<tr>
@@ -849,6 +908,7 @@ function productRow(p) {
     <td class="font-medium">${esc(p.name)}</td>
     <td class="text-slate-500">${esc(p.sku||"—")}</td>
     <td>${p.category?`<span class="badge bg-blue-50 text-blue-700">${esc(p.category)}</span>`:"—"}</td>
+    ${showBranchCol ? `<td class="text-slate-500">${esc(branchName(p.branchId))}</td>` : ""}
     <td>${fmtMoney(p.costPrice)}</td>
     <td class="font-semibold">${fmtMoney(p.sellingPrice)}</td>
     <td>${status}</td>
@@ -919,7 +979,9 @@ async function saveProduct(id) {
       await db.collection("products").doc(id).update(data);
       toast("Product updated.", "success");
     } else {
-      data.quantity = qty; data.createdAt = FieldValue.serverTimestamp();
+      const branchId = requireActiveBranch();
+      if (!branchId) return;
+      data.quantity = qty; data.createdAt = FieldValue.serverTimestamp(); data.branchId = branchId;
       const ref = await db.collection("products").add(data);
       if (qty > 0) await logStockMove(ref.id, name, "initial", qty, "Initial stock on product creation");
       toast("Product added.", "success");
@@ -1027,7 +1089,7 @@ function renderPOS() {
           <label class="lbl">Customer</label>
           <select id="posCustomer" class="input" onchange="posSelectedCustomer=this.value||null;togglePosNewCustomer()">
             <option value="">Walk-in customer</option>
-            ${STATE.customers.map(c => `<option value="${c.id}" ${posSelectedCustomer===c.id?'selected':''}>${esc(c.name)} — ${esc(c.phone||"")}</option>`).join("")}
+            ${bScope(STATE.customers).map(c => `<option value="${c.id}" ${posSelectedCustomer===c.id?'selected':''}>${esc(c.name)} — ${esc(c.phone||"")}</option>`).join("")}
           </select>
         </div>
         <div id="posNewCustomerBox" class="mb-3 ${posSelectedCustomer ? 'hidden' : ''}">
@@ -1062,12 +1124,16 @@ function renderPOS() {
   renderPOSGrid();
   renderPOSCart();
 }
-function renderPOSDataOnly(){ if (STATE.currentPage==='pos'){ renderPOSGrid(); renderPOSCart(); const sel=document.getElementById('posCustomer'); if(sel){ sel.innerHTML = `<option value="">Walk-in customer</option>` + STATE.customers.map(c => `<option value="${c.id}" ${posSelectedCustomer===c.id?'selected':''}>${esc(c.name)} — ${esc(c.phone||"")}</option>`).join(""); } } }
+function renderPOSDataOnly(){ if (STATE.currentPage==='pos'){ renderPOSGrid(); renderPOSCart(); const sel=document.getElementById('posCustomer'); if(sel){ sel.innerHTML = `<option value="">Walk-in customer</option>` + bScope(STATE.customers).map(c => `<option value="${c.id}" ${posSelectedCustomer===c.id?'selected':''}>${esc(c.name)} — ${esc(c.phone||"")}</option>`).join(""); } } }
 
 function renderPOSGrid() {
   const grid = document.getElementById("posGrid");
   if (!grid) return;
-  const items = STATE.products.filter(p => !posSearch || (p.name||"").toLowerCase().includes(posSearch) || (p.sku||"").toLowerCase().includes(posSearch));
+  if (isAggregateView()) {
+    grid.innerHTML = `<div class="col-span-full text-center py-10 text-sm text-slate-400">Select a specific branch from the top bar to ring up a sale.</div>`;
+    return;
+  }
+  const items = bScope(STATE.products).filter(p => !posSearch || (p.name||"").toLowerCase().includes(posSearch) || (p.sku||"").toLowerCase().includes(posSearch));
   grid.innerHTML = items.map(p => `
     <button onclick="addToCart('${p.id}')" ${Number(p.quantity)<=0?'disabled':''} class="card p-3 text-left hover:shadow-md hover:border-blue-300 transition disabled:opacity-40 disabled:cursor-not-allowed">
       ${p.imageUrl ? `<img src="${esc(p.imageUrl)}" class="w-full h-20 object-cover rounded-lg mb-2">` : `<div class="w-full h-20 rounded-lg bg-slate-100 flex items-center justify-center text-3xl mb-2">${p.iconKey ? iconEmoji(p.iconKey) : esc((p.name||"?").charAt(0))}</div>`}
@@ -1135,6 +1201,8 @@ function renderPOSCart() {
 
 async function completeSale() {
   if (!STATE.cart.length) { toast("Cart is empty.", "warn"); return; }
+  const branchId = requireActiveBranch();
+  if (!branchId) return;
   const t = cartTotals();
   const customer = posSelectedCustomer ? STATE.customers.find(c => c.id === posSelectedCustomer) : null;
   const newCustName = !customer ? posNewCustomerName.trim() : "";
@@ -1142,7 +1210,7 @@ async function completeSale() {
   const newCustAddress = !customer ? posNewCustomerAddress.trim() : "";
   const receiptNo = genReceiptNo();
   const saleData = {
-    receiptNo, items: STATE.cart.map(c => ({ productId: c.productId, name: c.name, sku: c.sku, price: c.price, qty: c.qty, total: c.price*c.qty })),
+    receiptNo, branchId, items: STATE.cart.map(c => ({ productId: c.productId, name: c.name, sku: c.sku, price: c.price, qty: c.qty, total: c.price*c.qty })),
     subtotal: t.subtotal, discount: t.discount, tax: t.tax, total: t.total,
     paymentMethod: posPayment, customerId: customer?.id || null, customerName: customer?.name || newCustName || "Walk-in",
     customerPhone: customer?.phone || newCustPhone || "", customerAddress: customer?.address || newCustAddress || "",
@@ -1155,7 +1223,7 @@ async function completeSale() {
     if (newCustName) {
       newCustRef = db.collection("customers").doc();
       batch.set(newCustRef, {
-        name: newCustName, phone: newCustPhone, email: "", address: newCustAddress,
+        name: newCustName, phone: newCustPhone, email: "", address: newCustAddress, branchId,
         totalSpent: t.total, purchaseCount: 1, outstandingBalance: 0,
         lastPurchaseAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp(),
       });
@@ -1203,7 +1271,7 @@ function filteredSalesRecords() {
   const q = salesRecFilter.q.toLowerCase();
   const from = salesRecFilter.from ? new Date(salesRecFilter.from + "T00:00:00") : null;
   const to = salesRecFilter.to ? new Date(salesRecFilter.to + "T23:59:59") : null;
-  return STATE.sales.filter(s => {
+  return bScope(STATE.sales).filter(s => {
     const t = s.createdAt && s.createdAt.toDate ? s.createdAt.toDate() : new Date(s.createdAt);
     if (from && t < from) return false;
     if (to && t > to) return false;
@@ -1215,8 +1283,9 @@ function filteredSalesRecords() {
 }
 function renderSalesRecords() {
   const rows = filteredSalesRecords();
-  const cashiers = [...new Set(STATE.sales.map(s => s.cashier).filter(Boolean))];
+  const cashiers = [...new Set(bScope(STATE.sales).map(s => s.cashier).filter(Boolean))];
   const total = rows.reduce((a,s) => a + (Number(s.total)||0), 0);
+  const showBranchCol = isAggregateView();
   document.getElementById("pageContainer").innerHTML = `
     <div class="card p-4 mb-4">
       <div class="flex flex-wrap gap-2 mb-3">
@@ -1250,13 +1319,14 @@ function renderSalesRecords() {
     </div>
     <div class="card overflow-hidden">
       <div class="overflow-x-auto"><table class="tbl">
-        <thead><tr><th></th><th>Receipt#</th><th>Date &amp; time</th><th>Customer</th><th>Cashier</th><th>Payment</th><th>Items</th><th>Total</th><th></th></tr></thead>
+        <thead><tr><th></th><th>Receipt#</th><th>Date &amp; time</th><th>Customer</th>${showBranchCol?'<th>Branch</th>':''}<th>Cashier</th><th>Payment</th><th>Items</th><th>Total</th><th></th></tr></thead>
         <tbody>${rows.map(s => `
           <tr>
             <td><input type="checkbox" class="salesRecCheck" value="${s.id}" style="width:16px;height:16px"></td>
             <td class="font-medium">${esc(s.receiptNo)}</td>
             <td class="text-slate-500">${fmtDateTime(s.createdAt)}</td>
             <td>${esc(s.customerName||"Walk-in")}</td>
+            ${showBranchCol ? `<td class="text-slate-500">${esc(branchName(s.branchId))}</td>` : ""}
             <td>${esc(s.cashier||"—")}</td>
             <td><span class="badge bg-blue-50 text-blue-700">${esc(s.paymentMethod)}</span></td>
             <td class="text-slate-500">${(s.items||[]).length} item(s)</td>
@@ -1456,26 +1526,28 @@ function fallbackWhatsappShare(receiptNo) {
 /* ---------------------------- Customers ---------------------------- */
 let customerSearch = "";
 function renderCustomers() {
-  const rows = STATE.customers.filter(c => !customerSearch || [c.name,c.phone,c.email].some(v => (v||"").toLowerCase().includes(customerSearch)));
+  const rows = bScope(STATE.customers).filter(c => !customerSearch || [c.name,c.phone,c.email].some(v => (v||"").toLowerCase().includes(customerSearch)));
+  const showBranchCol = isAggregateView();
   document.getElementById("pageContainer").innerHTML = `
     <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
       <input class="input max-w-xs" placeholder="Search by name, phone or email…" oninput="customerSearch=this.value.toLowerCase();renderCustomers()">
-      <button class="btn btn-primary sm:ml-auto" onclick="openCustomerModal()">+ Add customer</button>
+      ${!isAggregateView() ? `<button class="btn btn-primary sm:ml-auto" onclick="openCustomerModal()">+ Add customer</button>` : `<p class="text-xs text-slate-400 sm:ml-auto">Pick a specific branch above to add customers.</p>`}
     </div>
     <div class="card overflow-hidden">
       <div class="overflow-x-auto"><table class="tbl">
-        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Total spent</th><th>Purchases</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Phone</th><th>Email</th>${showBranchCol?'<th>Branch</th>':''}<th>Total spent</th><th>Purchases</th><th></th></tr></thead>
         <tbody>${rows.map(c => `
           <tr>
             <td class="font-medium cursor-pointer text-blue-700" onclick="openCustomerHistory('${c.id}')">${esc(c.name)}</td>
             <td>${esc(c.phone||"—")}</td><td>${esc(c.email||"—")}</td>
+            ${showBranchCol ? `<td class="text-slate-500">${esc(branchName(c.branchId))}</td>` : ""}
             <td class="font-semibold">${fmtMoney(c.totalSpent||0)}</td>
             <td>${c.purchaseCount||0}</td>
             <td class="text-right whitespace-nowrap">
               <button class="btn btn-outline btn-sm" onclick="openCustomerModal('${c.id}')">Edit</button>
               <button class="btn btn-danger btn-sm" onclick="deleteCustomer('${c.id}')">Delete</button>
             </td>
-          </tr>`).join("") || `<tr><td colspan="6" class="text-center text-slate-400 py-10">No customers yet.</td></tr>`}</tbody>
+          </tr>`).join("") || `<tr><td colspan="7" class="text-center text-slate-400 py-10">No customers yet.</td></tr>`}</tbody>
       </table></div>
     </div>
   `;
@@ -1513,7 +1585,12 @@ async function saveCustomer(id) {
   };
   try {
     if (id) await db.collection("customers").doc(id).update(data);
-    else { data.totalSpent = 0; data.purchaseCount = 0; data.createdAt = FieldValue.serverTimestamp(); await db.collection("customers").add(data); }
+    else {
+      const branchId = requireActiveBranch();
+      if (!branchId) return;
+      data.branchId = branchId; data.totalSpent = 0; data.purchaseCount = 0; data.createdAt = FieldValue.serverTimestamp();
+      await db.collection("customers").add(data);
+    }
     toast("Customer saved.", "success"); closeModal();
   } catch (e) { toast(e.message, "error"); }
 }
@@ -1542,21 +1619,24 @@ function openCustomerHistory(id) {
 
 /* ---------------------------- Suppliers ---------------------------- */
 function renderSuppliers() {
+  const scopedSuppliers = bScope(STATE.suppliers);
+  const showBranchCol = isAggregateView();
   document.getElementById("pageContainer").innerHTML = `
-    <div class="flex justify-end mb-4"><button class="btn btn-primary" onclick="openSupplierModal()">+ Add supplier</button></div>
+    <div class="flex justify-end mb-4">${!isAggregateView() ? `<button class="btn btn-primary" onclick="openSupplierModal()">+ Add supplier</button>` : `<p class="text-xs text-slate-400">Pick a specific branch above to add suppliers.</p>`}</div>
     <div class="card overflow-hidden">
       <div class="overflow-x-auto"><table class="tbl">
-        <thead><tr><th>Supplier</th><th>Phone</th><th>Email</th><th>Products supplied</th><th>Outstanding</th><th></th></tr></thead>
-        <tbody>${STATE.suppliers.map(s => `
+        <thead><tr><th>Supplier</th><th>Phone</th><th>Email</th>${showBranchCol?'<th>Branch</th>':''}<th>Products supplied</th><th>Outstanding</th><th></th></tr></thead>
+        <tbody>${scopedSuppliers.map(s => `
           <tr>
             <td class="font-medium">${esc(s.name)}</td><td>${esc(s.phone||"—")}</td><td>${esc(s.email||"—")}</td>
+            ${showBranchCol ? `<td class="text-slate-500">${esc(branchName(s.branchId))}</td>` : ""}
             <td>${esc(s.productsSupplied||"—")}</td>
             <td class="${(s.outstanding||0)>0?'text-red-600 font-semibold':''}">${fmtMoney(s.outstanding||0)}</td>
             <td class="text-right whitespace-nowrap">
               <button class="btn btn-outline btn-sm" onclick="openSupplierModal('${s.id}')">Edit</button>
               <button class="btn btn-danger btn-sm" onclick="deleteSupplier('${s.id}')">Delete</button>
             </td>
-          </tr>`).join("") || `<tr><td colspan="6" class="text-center text-slate-400 py-10">No suppliers yet.</td></tr>`}</tbody>
+          </tr>`).join("") || `<tr><td colspan="7" class="text-center text-slate-400 py-10">No suppliers yet.</td></tr>`}</tbody>
       </table></div>
     </div>
   `;
@@ -1596,7 +1676,12 @@ async function saveSupplier(id) {
   };
   try {
     if (id) await db.collection("suppliers").doc(id).update(data);
-    else { data.createdAt = FieldValue.serverTimestamp(); await db.collection("suppliers").add(data); }
+    else {
+      const branchId = requireActiveBranch();
+      if (!branchId) return;
+      data.branchId = branchId; data.createdAt = FieldValue.serverTimestamp();
+      await db.collection("suppliers").add(data);
+    }
     toast("Supplier saved.", "success"); closeModal();
   } catch (e) { toast(e.message, "error"); }
 }
@@ -1605,24 +1690,29 @@ async function deleteSupplier(id) { if (!confirm("Delete this supplier?")) retur
 /* ---------------------------- Purchases ---------------------------- */
 let purchaseCart = [];
 function renderPurchases() {
+  const scoped = bScope(STATE.purchases);
+  const showBranchCol = isAggregateView();
   document.getElementById("pageContainer").innerHTML = `
-    <div class="flex justify-end mb-4"><button class="btn btn-primary" onclick="openPurchaseModal()">+ New purchase order</button></div>
+    <div class="flex justify-end mb-4">${!isAggregateView() ? `<button class="btn btn-primary" onclick="openPurchaseModal()">+ New purchase order</button>` : `<p class="text-xs text-slate-400">Pick a specific branch above to create purchase orders.</p>`}</div>
     <div class="card overflow-hidden">
       <div class="overflow-x-auto"><table class="tbl">
-        <thead><tr><th>PO#</th><th>Supplier</th><th>Items</th><th>Total</th><th>Status</th><th>Date</th></tr></thead>
-        <tbody>${STATE.purchases.map(p => `
+        <thead><tr><th>PO#</th><th>Supplier</th>${showBranchCol?'<th>Branch</th>':''}<th>Items</th><th>Total</th><th>Status</th><th>Date</th></tr></thead>
+        <tbody>${scoped.map(p => `
           <tr>
             <td class="font-medium">${esc(p.poNumber)}</td><td>${esc(p.supplierName)}</td>
+            ${showBranchCol ? `<td class="text-slate-500">${esc(branchName(p.branchId))}</td>` : ""}
             <td>${(p.items||[]).length} item(s)</td><td class="font-semibold">${fmtMoney(p.total)}</td>
             <td><span class="badge ${p.status==='received'?'bg-green-100 text-green-700':'bg-amber-100 text-amber-700'}">${esc(p.status)}</span></td>
             <td class="text-slate-400">${fmtDate(p.createdAt)}</td>
-          </tr>`).join("") || `<tr><td colspan="6" class="text-center text-slate-400 py-10">No purchase orders yet.</td></tr>`}</tbody>
+          </tr>`).join("") || `<tr><td colspan="7" class="text-center text-slate-400 py-10">No purchase orders yet.</td></tr>`}</tbody>
       </table></div>
     </div>
   `;
 }
 function openPurchaseModal() {
   purchaseCart = [];
+  const branchSuppliers = bScope(STATE.suppliers);
+  const branchProducts = bScope(STATE.products);
   openModal(`
     <div class="modal-box" style="max-width:600px">
       <div class="p-5 border-b border-slate-100 flex items-center justify-between">
@@ -1631,11 +1721,11 @@ function openPurchaseModal() {
       </div>
       <div class="p-5 space-y-3">
         <div><label class="lbl">Supplier *</label>
-          <select id="po_supplier" class="input"><option value="">Select supplier…</option>${STATE.suppliers.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select>
+          <select id="po_supplier" class="input"><option value="">Select supplier…</option>${branchSuppliers.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select>
         </div>
         <div class="flex gap-2 items-end">
           <div class="flex-1"><label class="lbl">Product</label>
-            <select id="po_product" class="input">${STATE.products.map(p=>`<option value="${p.id}" data-cost="${p.costPrice}">${esc(p.name)}</option>`).join("")}</select>
+            <select id="po_product" class="input">${branchProducts.map(p=>`<option value="${p.id}" data-cost="${p.costPrice}">${esc(p.name)}</option>`).join("")}</select>
           </div>
           <div style="width:90px"><label class="lbl">Qty</label><input id="po_qty" type="number" class="input" value="1"></div>
           <button class="btn btn-outline" onclick="addPurchaseLine()">Add</button>
@@ -1670,6 +1760,8 @@ function renderPurchaseLines() {
   document.getElementById("po_total").textContent = "Total: " + fmtMoney(total);
 }
 async function submitPurchase(status) {
+  const branchId = requireActiveBranch();
+  if (!branchId) return;
   const supplierId = document.getElementById("po_supplier").value;
   const supplier = STATE.suppliers.find(s => s.id === supplierId);
   if (!supplier || !purchaseCart.length) { toast("Select a supplier and add at least one item.", "error"); return; }
@@ -1677,7 +1769,7 @@ async function submitPurchase(status) {
   const poNumber = "PO-" + Date.now().toString().slice(-8);
   try {
     await db.collection("purchases").add({
-      poNumber, supplierId, supplierName: supplier.name, items: purchaseCart, total, status, createdAt: FieldValue.serverTimestamp()
+      poNumber, branchId, supplierId, supplierName: supplier.name, items: purchaseCart, total, status, createdAt: FieldValue.serverTimestamp()
     });
     if (status === "received") {
       const batch = db.batch();
@@ -1743,11 +1835,11 @@ function exportReport(key, fmt) {
   } else if (key === "customers") {
     title = "Customer Purchase Report";
     head = ["Customer","Phone","Email","Total spent","Orders","Outstanding"];
-    rows = STATE.customers.map(c => [c.name, c.phone||"", c.email||"", (c.totalSpent||0).toFixed(2), c.purchaseCount||0, (c.outstandingBalance||0).toFixed(2)]);
+    rows = bScope(STATE.customers).map(c => [c.name, c.phone||"", c.email||"", (c.totalSpent||0).toFixed(2), c.purchaseCount||0, (c.outstandingBalance||0).toFixed(2)]);
   } else if (key === "inventory") {
     title = "Inventory Report";
     head = ["Product","SKU","Category","Qty","Cost price","Selling price","Stock value (cost)"];
-    rows = STATE.products.map(p => [p.name, p.sku||"", p.category||"", p.quantity||0, (p.costPrice||0).toFixed(2), (p.sellingPrice||0).toFixed(2), ((p.costPrice||0)*(p.quantity||0)).toFixed(2)]);
+    rows = bScope(STATE.products).map(p => [p.name, p.sku||"", p.category||"", p.quantity||0, (p.costPrice||0).toFixed(2), (p.sellingPrice||0).toFixed(2), ((p.costPrice||0)*(p.quantity||0)).toFixed(2)]);
   } else if (key === "pnl") {
     title = "Profit & Loss Report";
     const sales = salesInRange(from,to);
@@ -1762,7 +1854,7 @@ function exportReport(key, fmt) {
   } else if (key === "stockmoves") {
     title = "Stock Movement Report";
     head = ["Product","Type","Qty","Note","User","Date"];
-    rows = STATE.stockMoves.filter(m => { const t = m.date?.toDate ? m.date.toDate() : new Date(m.date); return t>=from && t<=to; })
+    rows = bScope(STATE.stockMoves).filter(m => { const t = m.date?.toDate ? m.date.toDate() : new Date(m.date); return t>=from && t<=to; })
       .map(m => [m.productName, m.type, m.qty, m.note||"", m.user||"", fmtDateTime(m.date)]);
   }
   if (!rows.length) { toast("No data found for the selected range.", "warn"); return; }
@@ -1773,15 +1865,21 @@ function exportReport(key, fmt) {
 /* ---------------------------- Staff & Roles ---------------------------- */
 const ALL_ROLES = ["Super Admin","Manager","Cashier","Sales Representative","Store Keeper"];
 function renderStaff() {
+  const isSA = STATE.staff.role === "Super Admin";
+  const rows = isSA
+    ? (isAggregateView() ? STATE.staffList : STATE.staffList.filter(s => s.role === "Super Admin" || s.branchId === STATE.currentBranchId))
+    : STATE.staffList.filter(s => s.branchId === STATE.staff.branchId);
+  const showBranchCol = isSA;
   document.getElementById("pageContainer").innerHTML = `
     <div class="flex justify-end mb-4"><button class="btn btn-primary" onclick="openStaffModal()">+ Add staff member</button></div>
     <div class="card overflow-hidden">
       <div class="overflow-x-auto"><table class="tbl">
-        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead>
-        <tbody>${STATE.staffList.map(s => `
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th>${showBranchCol?'<th>Branch</th>':''}<th>Status</th><th></th></tr></thead>
+        <tbody>${rows.map(s => `
           <tr>
             <td class="font-medium">${esc(s.name)}</td><td>${esc(s.email)}</td>
             <td><span class="badge bg-blue-50 text-blue-700">${esc(s.role)}</span></td>
+            ${showBranchCol ? `<td class="text-slate-500">${s.role==='Super Admin'?'All branches':esc(branchName(s.branchId))}</td>` : ""}
             <td>${s.active===false ? `<span class="badge bg-red-100 text-red-700">Disabled</span>` : `<span class="badge bg-green-100 text-green-700">Active</span>`}</td>
             <td class="text-right whitespace-nowrap">
               <button class="btn btn-outline btn-sm" onclick="openStaffModal('${s.id}')">Edit role</button>
@@ -1794,6 +1892,7 @@ function renderStaff() {
 }
 function openStaffModal(id) {
   const s = id ? STATE.staffList.find(x => x.id === id) : null;
+  const defaultBranch = s?.branchId || (activeBranchId() && activeBranchId() !== "ALL" ? activeBranchId() : (STATE.branches[0]?.id || ""));
   openModal(`
     <div class="modal-box">
       <div class="p-5 border-b border-slate-100 flex items-center justify-between">
@@ -1809,27 +1908,35 @@ function openStaffModal(id) {
         <div><label class="lbl">Role</label>
           <select id="stf_role" class="input">${ALL_ROLES.map(r => `<option ${s?.role===r?'selected':''}>${r}</option>`).join("")}</select>
         </div>
+        <div><label class="lbl">Branch <span class="text-slate-400 font-normal normal-case">(not needed for Super Admin — they see every branch)</span></label>
+          <select id="stf_branch" class="input">
+            <option value="">— Select branch —</option>
+            ${STATE.branches.map(b => `<option value="${b.id}" ${defaultBranch===b.id?'selected':''}>${esc(b.name)}</option>`).join("")}
+          </select>
+        </div>
       </div>
       <div class="p-5 border-t border-slate-100 flex justify-end gap-2">
         <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveStaff(${s ? `'${s.id}'` : 'null'})">${s ? "Save role" : "Create account"}</button>
+        <button class="btn btn-primary" onclick="saveStaff(${s ? `'${s.id}'` : 'null'})">${s ? "Save changes" : "Create account"}</button>
       </div>
     </div>
   `);
 }
 async function saveStaff(id) {
   const role = document.getElementById("stf_role").value;
+  const branchId = document.getElementById("stf_branch").value || null;
+  if (role !== "Super Admin" && !branchId) { toast("Select a branch for this staff member.", "error"); return; }
   try {
     if (id) {
-      await db.collection("staff").doc(id).update({ role });
-      toast("Role updated.", "success"); closeModal(); return;
+      await db.collection("staff").doc(id).update({ role, branchId: role === "Super Admin" ? null : branchId });
+      toast("Staff updated.", "success"); closeModal(); return;
     }
     const name = document.getElementById("stf_name").value.trim();
     const email = document.getElementById("stf_email").value.trim();
     const password = document.getElementById("stf_password").value;
     if (!name || !email || password.length < 6) { toast("Fill all fields — password must be 6+ characters.", "error"); return; }
     const cred = await secondaryAuth.createUserWithEmailAndPassword(email, password);
-    await db.collection("staff").doc(cred.user.uid).set({ name, email, role, active: true, createdAt: FieldValue.serverTimestamp() });
+    await db.collection("staff").doc(cred.user.uid).set({ name, email, role, branchId: role === "Super Admin" ? null : branchId, active: true, createdAt: FieldValue.serverTimestamp() });
     await secondaryAuth.signOut();
     toast("Staff account created.", "success"); closeModal();
   } catch (e) { toast(e.message, "error"); }
@@ -1837,6 +1944,118 @@ async function saveStaff(id) {
 async function toggleStaffActive(id, makeActive) {
   await db.collection("staff").doc(id).update({ active: makeActive });
   toast(makeActive ? "Staff account enabled." : "Staff account disabled.", "success");
+}
+
+/* ---------------------------- Branches ---------------------------- */
+function unassignedCounts() {
+  return {
+    products: STATE.products.filter(p => !p.branchId).length,
+    customers: STATE.customers.filter(c => !c.branchId).length,
+    suppliers: STATE.suppliers.filter(s => !s.branchId).length,
+    sales: STATE.sales.filter(s => !s.branchId).length,
+    purchases: STATE.purchases.filter(p => !p.branchId).length,
+  };
+}
+function renderBranches() {
+  const counts = unassignedCounts();
+  const totalUnassigned = Object.values(counts).reduce((a,b)=>a+b,0);
+  document.getElementById("pageContainer").innerHTML = `
+    ${totalUnassigned > 0 ? `
+    <div class="card p-4 mb-4" style="border-color:#FDE68A;background:#FFFBEB">
+      <p class="text-sm font-semibold mb-1">Records from before branches were set up</p>
+      <p class="text-xs text-slate-500 mb-3">${counts.products} product(s), ${counts.customers} customer(s), ${counts.suppliers} supplier(s), ${counts.sales} sale(s) and ${counts.purchases} purchase(s) aren't attached to any branch yet — they only show up in "All branches" view for now. Assign them to a branch so they show up properly:</p>
+      <div class="flex flex-wrap gap-2 items-center">
+        <select id="migrateBranchSelect" class="input w-auto">
+          ${STATE.branches.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join("")}
+        </select>
+        <button class="btn btn-orange btn-sm" onclick="migrateUnassignedToBranch()">Assign all to this branch</button>
+      </div>
+    </div>` : ""}
+    <div class="flex justify-end mb-4"><button class="btn btn-primary" onclick="openBranchModal()">+ Add branch</button></div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      ${STATE.branches.map(b => {
+        const prodCount = STATE.products.filter(p => p.branchId === b.id).length;
+        const salesCount = STATE.sales.filter(s => s.branchId === b.id).length;
+        const revenue = STATE.sales.filter(s => s.branchId === b.id).reduce((a,s)=>a+(Number(s.total)||0),0);
+        return `<div class="card p-4">
+          <div class="flex items-start justify-between mb-2">
+            <h3 class="font-display font-semibold">${esc(b.name)}</h3>
+            <span class="badge bg-blue-50 text-blue-700">${STATE.currentBranchId===b.id?'Active':''}</span>
+          </div>
+          <p class="text-xs text-slate-500 mb-3">${esc(b.address||"No address set")}${b.phone?" · "+esc(b.phone):""}</p>
+          <div class="grid grid-cols-3 gap-2 mb-3 text-center">
+            <div class="stat-card py-2"><p class="text-[11px] text-slate-500">Products</p><p class="font-bold text-sm">${prodCount}</p></div>
+            <div class="stat-card py-2"><p class="text-[11px] text-slate-500">Sales</p><p class="font-bold text-sm">${salesCount}</p></div>
+            <div class="stat-card py-2"><p class="text-[11px] text-slate-500">Revenue</p><p class="font-bold text-sm">${fmtMoney(revenue)}</p></div>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn btn-outline btn-sm flex-1" onclick="setActiveBranch('${b.id}');setPage('dashboard')">View dashboard</button>
+            <button class="btn btn-outline btn-sm" onclick="openBranchModal('${b.id}')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteBranch('${b.id}')">Delete</button>
+          </div>
+        </div>`;
+      }).join("") || `<p class="text-sm text-slate-400 col-span-full text-center py-10">No branches yet — add your first one.</p>`}
+    </div>
+  `;
+}
+async function migrateUnassignedToBranch() {
+  const branchId = document.getElementById("migrateBranchSelect").value;
+  if (!branchId) { toast("Add a branch first.", "warn"); return; }
+  if (!confirm("Assign all unbranched products, customers, suppliers, sales and purchases to this branch? This can't be undone.")) return;
+  const jobs = [
+    ["products", STATE.products], ["customers", STATE.customers], ["suppliers", STATE.suppliers],
+    ["sales", STATE.sales], ["purchases", STATE.purchases],
+  ];
+  try {
+    for (const [col, arr] of jobs) {
+      const ids = arr.filter(x => !x.branchId).map(x => x.id);
+      for (let i = 0; i < ids.length; i += 400) {
+        const chunk = ids.slice(i, i+400);
+        const batch = db.batch();
+        chunk.forEach(id => batch.update(db.collection(col).doc(id), { branchId }));
+        await batch.commit();
+      }
+    }
+    toast("Existing records assigned to " + branchName(branchId) + ".", "success");
+  } catch (e) { toast(e.message, "error"); }
+}
+function openBranchModal(id) {
+  const b = id ? STATE.branches.find(x => x.id === id) : null;
+  openModal(`
+    <div class="modal-box">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+        <h3 class="font-display font-semibold">${b ? "Edit branch" : "Add branch"}</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-700">✕</button>
+      </div>
+      <div class="p-5 space-y-3">
+        <div><label class="lbl">Branch name *</label><input id="br_name" class="input" value="${esc(b?.name)}" placeholder="e.g. Ikeja Branch"></div>
+        <div><label class="lbl">Address</label><input id="br_address" class="input" value="${esc(b?.address)}"></div>
+        <div><label class="lbl">Phone</label><input id="br_phone" class="input" value="${esc(b?.phone)}"></div>
+      </div>
+      <div class="p-5 border-t border-slate-100 flex justify-end gap-2">
+        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveBranch(${b ? `'${b.id}'` : 'null'})">${b ? "Save changes" : "Add branch"}</button>
+      </div>
+    </div>
+  `);
+}
+async function saveBranch(id) {
+  const name = document.getElementById("br_name").value.trim();
+  if (!name) { toast("Branch name is required.", "error"); return; }
+  const data = { name, address: document.getElementById("br_address").value.trim(), phone: document.getElementById("br_phone").value.trim() };
+  try {
+    if (id) await db.collection("branches").doc(id).update(data);
+    else { data.createdAt = FieldValue.serverTimestamp(); await db.collection("branches").add(data); }
+    toast("Branch saved.", "success"); closeModal();
+  } catch (e) { toast(e.message, "error"); }
+}
+async function deleteBranch(id) {
+  const hasData = STATE.products.some(p=>p.branchId===id) || STATE.sales.some(s=>s.branchId===id);
+  if (hasData && !confirm("This branch already has products or sales recorded. Delete it anyway? (Its records will stay but won't show under any branch.)")) return;
+  if (!hasData && !confirm("Delete this branch?")) return;
+  await db.collection("branches").doc(id).delete();
+  if (STATE.currentBranchId === id) STATE.currentBranchId = "ALL";
+  toast("Branch deleted.", "success");
 }
 
 /* ---------------------------- Settings ---------------------------- */
