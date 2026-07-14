@@ -676,6 +676,23 @@ function toggleNotifPanel() {
 function detachListeners() { STATE.unsub.forEach(fn => { try { fn(); } catch(e){} }); STATE.unsub = []; }
 
 function attachListeners() {
+  const isSA = STATE.staff.role === "Super Admin";
+  const myBranch = STATE.staff.branchId;
+  if (!isSA && !myBranch) {
+    toast("Your account isn't assigned to a branch yet — ask your admin to assign you one in Staff & Roles.", "warn");
+  }
+  // Non-admins must query with an explicit branchId filter — Firestore rejects an
+  // entire unfiltered list query if it can't prove every result would pass the
+  // security rule, so this keeps their queries valid under the stricter rules.
+  // If they have no branch yet, use a value that can never match so the query
+  // stays valid (rather than crashing on an undefined filter value).
+  const branchFilterValue = myBranch || "__unassigned__";
+  const scoped = (col, orderField, orderDir, lim) => {
+    let q = isSA ? db.collection(col) : db.collection(col).where("branchId", "==", branchFilterValue);
+    if (orderField) q = q.orderBy(orderField, orderDir || "asc");
+    if (lim) q = q.limit(lim);
+    return q;
+  };
   STATE.unsub.push(db.collection("branches").orderBy("name").onSnapshot(snap => {
     STATE.branches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderBranchSwitcher();
@@ -685,33 +702,33 @@ function attachListeners() {
     if (doc.exists) STATE.company = Object.assign({}, STATE.company, doc.data());
     if (["dashboard","settings","pos"].includes(STATE.currentPage)) refreshCurrentPage();
   }));
-  STATE.unsub.push(db.collection("products").orderBy("name").onSnapshot(snap => {
+  STATE.unsub.push(scoped("products", "name").onSnapshot(snap => {
     STATE.products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (["dashboard","products","pos","reports"].includes(STATE.currentPage)) refreshCurrentPage();
   }, err => console.error(err)));
-  STATE.unsub.push(db.collection("customers").orderBy("name").onSnapshot(snap => {
+  STATE.unsub.push(scoped("customers", "name").onSnapshot(snap => {
     STATE.customers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (["dashboard","customers","pos","reports"].includes(STATE.currentPage)) refreshCurrentPage();
   }, err => console.error(err)));
-  STATE.unsub.push(db.collection("suppliers").orderBy("name").onSnapshot(snap => {
+  STATE.unsub.push(scoped("suppliers", "name").onSnapshot(snap => {
     STATE.suppliers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (["suppliers","purchases","dashboard"].includes(STATE.currentPage)) refreshCurrentPage();
   }, err => console.error(err)));
-  STATE.unsub.push(db.collection("sales").orderBy("createdAt", "desc").limit(1000).onSnapshot(snap => {
+  STATE.unsub.push(scoped("sales", "createdAt", "desc", 1000).onSnapshot(snap => {
     STATE.sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (["dashboard","reports","customers","salesRecords"].includes(STATE.currentPage)) refreshCurrentPage();
   }, err => console.error(err)));
-  STATE.unsub.push(db.collection("purchases").orderBy("createdAt", "desc").limit(500).onSnapshot(snap => {
+  STATE.unsub.push(scoped("purchases", "createdAt", "desc", 500).onSnapshot(snap => {
     STATE.purchases = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (["purchases","reports","dashboard"].includes(STATE.currentPage)) refreshCurrentPage();
   }, err => console.error(err)));
-  STATE.unsub.push(db.collection("staff").onSnapshot(snap => {
+  STATE.unsub.push((isSA ? db.collection("staff") : db.collection("staff").where("branchId", "==", branchFilterValue)).onSnapshot(snap => {
     STATE.staffList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (STATE.currentPage === "staff") refreshCurrentPage();
     const me = snap.docs.find(d => d.id === STATE.user.uid);
     if (me) STATE.staff = me.data();
   }, err => console.error(err)));
-  STATE.unsub.push(db.collection("stockMoves").orderBy("date","desc").limit(500).onSnapshot(snap => {
+  STATE.unsub.push(scoped("stockMoves", "date", "desc", 500).onSnapshot(snap => {
     STATE.stockMoves = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (["dashboard","reports"].includes(STATE.currentPage)) refreshCurrentPage();
   }, err => console.error(err)));
@@ -1871,20 +1888,20 @@ function renderStaff() {
     : STATE.staffList.filter(s => s.branchId === STATE.staff.branchId);
   const showBranchCol = isSA;
   document.getElementById("pageContainer").innerHTML = `
-    <div class="flex justify-end mb-4"><button class="btn btn-primary" onclick="openStaffModal()">+ Add staff member</button></div>
+    <div class="flex justify-end mb-4">${isSA ? `<button class="btn btn-primary" onclick="openStaffModal()">+ Add staff member</button>` : `<p class="text-xs text-slate-400">Only the Super Admin can add or edit staff accounts.</p>`}</div>
     <div class="card overflow-hidden">
       <div class="overflow-x-auto"><table class="tbl">
-        <thead><tr><th>Name</th><th>Email</th><th>Role</th>${showBranchCol?'<th>Branch</th>':''}<th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th>${showBranchCol?'<th>Branch</th>':''}<th>Status</th>${isSA?'<th></th>':''}</tr></thead>
         <tbody>${rows.map(s => `
           <tr>
             <td class="font-medium">${esc(s.name)}</td><td>${esc(s.email)}</td>
             <td><span class="badge bg-blue-50 text-blue-700">${esc(s.role)}</span></td>
             ${showBranchCol ? `<td class="text-slate-500">${s.role==='Super Admin'?'All branches':esc(branchName(s.branchId))}</td>` : ""}
             <td>${s.active===false ? `<span class="badge bg-red-100 text-red-700">Disabled</span>` : `<span class="badge bg-green-100 text-green-700">Active</span>`}</td>
-            <td class="text-right whitespace-nowrap">
+            ${isSA ? `<td class="text-right whitespace-nowrap">
               <button class="btn btn-outline btn-sm" onclick="openStaffModal('${s.id}')">Edit role</button>
               ${s.id !== STATE.user.uid ? `<button class="btn btn-danger btn-sm" onclick="toggleStaffActive('${s.id}',${s.active===false})">${s.active===false?'Enable':'Disable'}</button>` : ""}
-            </td>
+            </td>` : ""}
           </tr>`).join("")}</tbody>
       </table></div>
     </div>
